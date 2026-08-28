@@ -4,6 +4,7 @@ commands. Advisory-safety-net only — see docs/licensing and CLAUDE.md for the
 policies this enforces. Fails open (exit 0) on any internal error: a buggy
 hook must never be the reason a legitimate action gets stuck.
 """
+
 import json
 import re
 import sys
@@ -17,7 +18,10 @@ SECRET_PATTERNS = [
 ]
 
 DESTRUCTIVE_BASH_PATTERNS = [
-    (re.compile(r"\bgit\s+push\s+.*(--force(?!-with-lease)|(?<!--force-with-lease)\s-f\b)"), "force push"),
+    (
+        re.compile(r"\bgit\s+push\s+.*(--force(?!-with-lease)|(?<!--force-with-lease)\s-f\b)"),
+        "force push",
+    ),
     (re.compile(r"\bgit\s+reset\s+--hard\b"), "git reset --hard"),
     (re.compile(r"\bgit\s+clean\s+.*-[a-zA-Z]*f"), "git clean -f"),
     (re.compile(r"\brm\s+-[a-zA-Z]*r[a-zA-Z]*f|\brm\s+-[a-zA-Z]*f[a-zA-Z]*r"), "rm -rf"),
@@ -33,13 +37,17 @@ ENV_EXAMPLE_ALLOWED = re.compile(r"\.env\.example$")
 
 
 def deny(reason: str):
-    print(json.dumps({
-        "hookSpecificOutput": {
-            "hookEventName": "PreToolUse",
-            "permissionDecision": "deny",
-            "permissionDecisionReason": reason,
-        }
-    }))
+    print(
+        json.dumps(
+            {
+                "hookSpecificOutput": {
+                    "hookEventName": "PreToolUse",
+                    "permissionDecision": "deny",
+                    "permissionDecisionReason": reason,
+                }
+            }
+        )
+    )
     sys.exit(0)
 
 

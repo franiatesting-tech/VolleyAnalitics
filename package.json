@@ -1,0 +1,17 @@
+{
+  "name": "volley-intelligence",
+  "private": true,
+  "packageManager": "pnpm@11.24.0",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "dev:web": "pnpm --filter web dev",
+    "build:web": "pnpm --filter web build",
+    "lint:web": "pnpm --filter web lint",
+    "typecheck:web": "pnpm --filter web typecheck",
+    "test:web": "pnpm --filter web test",
+    "gen:contracts": "pnpm --filter contracts generate",
+    "test:e2e": "pnpm --filter web exec playwright test"
+  }
+}

@@ -1,0 +1,28 @@
+[project]
+name = "volley-intelligence"
+version = "0.0.0"
+requires-python = ">=3.11,<3.12"
+
+[tool.uv.workspace]
+members = [
+  "packages/domain-py",
+  "services/api",
+  "services/worker",
+]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+extend-exclude = ["ml", "tools"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.ruff.lint.per-file-ignores]
+# FastAPI's Depends(...)-as-default-argument is the framework's documented,
+# correct idiom -- not the "mutable default argument" footgun B008 targets.
+"services/api/src/volley_api/api/routes/*.py" = ["B008"]
+"services/api/src/volley_api/core/auth.py" = ["B008"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "strict"

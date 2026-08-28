@@ -2,14 +2,24 @@
 
 Commercial post-match video analytics for indoor 6x6 volleyball: automated statistics, computer-vision tracking, tactical analytics, video-synced visualization, and video-based biomechanics (Technique Lab).
 
-This repository is at the **foundation stage** — architecture, contracts, and governance are being established before feature implementation begins. See:
+This repository is in **Phase 1 (platform skeleton)** — a real, tested backend runs on synthetic match data while the frontend and real CV pipeline are built out. See:
 
 - [`PROJECT_STATUS.md`](PROJECT_STATUS.md) — what's true right now
 - [`ROADMAP.md`](ROADMAP.md) — phased implementation plan
 - [`docs/product/MVP.md`](docs/product/MVP.md) — what we're building first
 - [`docs/product/NON_GOALS.md`](docs/product/NON_GOALS.md) — what we're explicitly not building yet
-- [`docs/architecture/adr/ADR-001-foundational-architecture.md`](docs/architecture/adr/ADR-001-foundational-architecture.md) — the architecture decision this repo is built on
+- [`docs/architecture/adr/ADR-001-foundational-architecture.md`](docs/architecture/adr/ADR-001-foundational-architecture.md) — the founding architecture decision
+- [`docs/architecture/adr/ADR-002-monorepo-skeleton.md`](docs/architecture/adr/ADR-002-monorepo-skeleton.md) — monorepo tooling, shared Python package, contract generation
 - [`docs/licensing/OSS_MANIFEST.md`](docs/licensing/OSS_MANIFEST.md) — every third-party dependency and its license status
+
+## Running it locally
+
+```bash
+cp .env.example .env   # fill in real values, especially BETTER_AUTH_SECRET
+docker compose up
+```
+
+Or without Docker: `uv sync --all-packages` (Python) and `pnpm install` (Node) at the repo root, then run `services/api`, `services/worker`, and `apps/web` each in their own terminal per their own README/scripts. See `ROADMAP.md` Phase 1 for the exact exit criterion this setup targets.
 
 ## Repository layout
 
@@ -17,8 +27,9 @@ This repository is at the **foundation stage** — architecture, contracts, and 
 apps/web            Next.js 16 frontend (analyst workstation UI)
 services/api         FastAPI backend (org-scoped REST/RPC, JWT verification)
 services/worker       Celery workers (video pipeline, long-running ML jobs)
+packages/domain-py    Shared Python domain models/schemas + synthetic-match generator (api + worker both depend on this)
 packages/ui          Shared React components / design system primitives
-packages/contracts    Shared types/schemas between web and api (source of truth for API shape)
+packages/contracts    Generated TypeScript types + typed client from services/api's OpenAPI schema -- never hand-duplicated
 ml/detection          Player/object detection (RF-DETR)
 ml/tracking           Multi-object tracking (ByteTrack / BoT-SORT eval)
 ml/court              Court calibration & homography
@@ -37,4 +48,4 @@ docs/                 Architecture, product, domain, licensing, privacy, ops doc
 
 ## Getting started
 
-Implementation has not started yet — see `ROADMAP.md` Phase 0/1 for the first buildable slice.
+See "Running it locally" above, and `PROJECT_STATUS.md` for exactly what's built, tested, and verified so far vs. still in progress.

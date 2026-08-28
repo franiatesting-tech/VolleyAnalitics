@@ -3,6 +3,7 @@
 to check definition-of-done and update PROJECT_STATUS.md, shown only when
 there are meaningful uncommitted changes. Fails open on any internal error.
 """
+
 import json
 import subprocess
 import sys
@@ -19,27 +20,35 @@ def main():
     try:
         result = subprocess.run(
             ["git", "status", "--porcelain"],
-            cwd=cwd, capture_output=True, text=True, timeout=15, check=False,
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            timeout=15,
+            check=False,
         )
-        changed = [l for l in result.stdout.splitlines() if l.strip()]
+        changed = [line for line in result.stdout.splitlines() if line.strip()]
     except Exception:
         sys.exit(0)
 
     # Ignore trivial/no-op cases: nothing changed, or only PROJECT_STATUS.md itself.
-    substantive = [l for l in changed if "PROJECT_STATUS.md" not in l]
+    substantive = [line for line in changed if "PROJECT_STATUS.md" not in line]
     if len(substantive) < 3:
         sys.exit(0)
 
-    print(json.dumps({
-        "hookSpecificOutput": {
-            "hookEventName": "Stop",
-            "additionalContext": (
-                f"{len(substantive)} files changed this session. Before wrapping up: "
-                "check .claude/skills/definition-of-done for the relevant checklist, "
-                "and update PROJECT_STATUS.md if this represents a meaningful state change."
-            ),
-        }
-    }))
+    print(
+        json.dumps(
+            {
+                "hookSpecificOutput": {
+                    "hookEventName": "Stop",
+                    "additionalContext": (
+                        f"{len(substantive)} files changed this session. Before wrapping up: "
+                        "check .claude/skills/definition-of-done for the relevant checklist, "
+                        "and update PROJECT_STATUS.md if this represents a meaningful state change."
+                    ),
+                }
+            }
+        )
+    )
     sys.exit(0)
 
 

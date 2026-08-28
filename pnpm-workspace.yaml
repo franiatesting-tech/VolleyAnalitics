@@ -1,0 +1,7 @@
+packages:
+  - "apps/*"
+  - "packages/ui"
+  - "packages/contracts"
+allowBuilds:
+  esbuild: true
+  unrs-resolver: true

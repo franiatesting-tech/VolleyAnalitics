@@ -1,0 +1,85 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+/*
+ * Volley Intelligence — analyst workstation theme.
+ * Deliberately dark-only (graphite base + one electric accent), the way a
+ * broadcast-graphics / trading-terminal tool is dark-only: this is not a
+ * generic SaaS app with a light/dark toggle, it's a fixed product identity.
+ */
+:root {
+  --background: oklch(0.145 0.006 260);
+  --foreground: oklch(0.97 0.003 260);
+
+  --surface: oklch(0.19 0.007 260);
+  --surface-raised: oklch(0.225 0.008 260);
+
+  --border: oklch(0.3 0.01 260);
+  --border-strong: oklch(0.38 0.012 260);
+
+  --muted: oklch(0.24 0.008 260);
+  --muted-foreground: oklch(0.66 0.012 260);
+
+  /* Electric accent — primary emphasis color, used sparingly. */
+  --accent: oklch(0.74 0.16 220);
+  --accent-foreground: oklch(0.145 0.02 220);
+
+  --success: oklch(0.72 0.16 150);
+  --warning: oklch(0.8 0.16 85);
+  --destructive: oklch(0.64 0.22 25);
+  --destructive-foreground: oklch(0.97 0.01 25);
+
+  --ring: var(--accent);
+  --radius: 0.5rem;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-ring: var(--ring);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+* {
+  border-color: var(--color-border);
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  background: var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+}
+
+/* Motion communicates state, never decoration -- always provide a static
+ * fallback when the user has asked for reduced motion. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

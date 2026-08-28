@@ -4,6 +4,7 @@ ROADMAP.md phase + open LICENSE_DECISIONS.md items into context, so every
 session starts with current project state instead of stale assumptions.
 Fails open (prints nothing, exits 0) on any internal error.
 """
+
 import json
 import re
 import sys
@@ -31,9 +32,10 @@ def main():
     decisions = read(root / "docs" / "licensing" / "LICENSE_DECISIONS.md", max_chars=8000)
 
     status_open_re = re.compile(r"status[:\*\s]*open", re.IGNORECASE)
-    open_items = "\n".join(
-        line for line in decisions.splitlines() if status_open_re.search(line)
-    ) or "(none currently open)"
+    open_items = (
+        "\n".join(line for line in decisions.splitlines() if status_open_re.search(line))
+        or "(none currently open)"
+    )
 
     phase_match = re.search(r"^##\s+(Phase[^\n]*)", roadmap, re.MULTILINE)
     current_phase = phase_match.group(1) if phase_match else "(see ROADMAP.md)"
@@ -48,12 +50,16 @@ def main():
         f"Open licensing decisions:\n{open_items}\n"
     )
 
-    print(json.dumps({
-        "hookSpecificOutput": {
-            "hookEventName": "SessionStart",
-            "additionalContext": context,
-        }
-    }))
+    print(
+        json.dumps(
+            {
+                "hookSpecificOutput": {
+                    "hookEventName": "SessionStart",
+                    "additionalContext": context,
+                }
+            }
+        )
+    )
     sys.exit(0)
 
 

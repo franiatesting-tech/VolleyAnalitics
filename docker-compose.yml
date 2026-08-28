@@ -1,0 +1,130 @@
+name: volley-intelligence
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: volley
+      POSTGRES_PASSWORD: volley
+      POSTGRES_DB: volley
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U volley -d volley"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  valkey:
+    image: valkey/valkey:8-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: infra/docker/python.Dockerfile
+      target: api
+    ports:
+      - "8000:8000"
+    environment:
+      ENV: development
+      DATABASE_URL: postgresql://volley:volley@postgres:5432/volley
+      VALKEY_URL: redis://valkey:6379/0
+      AUTH_JWKS_URL: ${AUTH_JWKS_URL:-http://web:3000/api/auth/jwks}
+      AUTH_ISSUER: ${AUTH_ISSUER:-http://localhost:3000}
+      AUTH_AUDIENCE: ${AUTH_AUDIENCE:-volley-api}
+      DEV_AUTH_BYPASS: ${DEV_AUTH_BYPASS:-false}
+      CORS_ALLOWED_ORIGINS: http://localhost:3000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+    volumes:
+      - ./services/api:/workspace/services/api
+      - ./packages/domain-py:/workspace/packages/domain-py
+
+  worker:
+    build:
+      context: .
+      dockerfile: infra/docker/python.Dockerfile
+      target: worker
+    environment:
+      ENV: development
+      DATABASE_URL: postgresql://volley:volley@postgres:5432/volley
+      VALKEY_URL: redis://valkey:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+    volumes:
+      - ./services/worker:/workspace/services/worker
+      - ./packages/domain-py:/workspace/packages/domain-py
+
+  # One-off job: creates Better Auth's own tables (owned by Better Auth's
+  # CLI, never by Alembic -- see CLAUDE.md's auth ownership rule). Runs once
+  # per `docker compose up`; `web` waits for it to exit 0 before starting.
+  # Re-running against an already-migrated database is a documented no-op
+  # per Better Auth's own migrate command.
+  web-migrate:
+    build:
+      context: .
+      dockerfile: infra/docker/web.Dockerfile
+      target: dev
+    environment:
+      BETTER_AUTH_URL: http://localhost:3000
+      DATABASE_URL: postgresql://volley:volley@postgres:5432/volley
+      # The CLI loads src/lib/auth.ts to introspect the schema, which
+      # constructs betterAuth({ secret: ... }) at import time -- needs a
+      # value present even though migration itself doesn't use it.
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?set BETTER_AUTH_SECRET in .env -- see .env.example}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./apps/web:/workspace/apps/web
+      - web_node_modules:/workspace/apps/web/node_modules
+    command: ["pnpm", "auth:migrate"]
+
+  web:
+    build:
+      context: .
+      dockerfile: infra/docker/web.Dockerfile
+      target: dev
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+      BETTER_AUTH_URL: http://localhost:3000
+      DATABASE_URL: postgresql://volley:volley@postgres:5432/volley
+      # Must match the api service's values exactly -- Better Auth's JWT
+      # plugin uses AUTH_AUDIENCE/AUTH_ISSUER to set the token's aud/iss
+      # claims, and services/api rejects any token whose aud/iss don't
+      # match its own AUTH_AUDIENCE/AUTH_ISSUER. A mismatch here means
+      # every authenticated API call 401s -- see ADR-003.
+      AUTH_ISSUER: ${AUTH_ISSUER:-http://localhost:3000}
+      AUTH_AUDIENCE: ${AUTH_AUDIENCE:-volley-api}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?set BETTER_AUTH_SECRET in .env -- see .env.example}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      web-migrate:
+        condition: service_completed_successfully
+    volumes:
+      - ./apps/web:/workspace/apps/web
+      - ./packages/ui:/workspace/packages/ui
+      - ./packages/contracts:/workspace/packages/contracts
+      - web_node_modules:/workspace/apps/web/node_modules
+
+volumes:
+  postgres_data:
+  web_node_modules:

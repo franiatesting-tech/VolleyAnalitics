@@ -1,0 +1,29 @@
+[project]
+name = "volley-worker"
+version = "0.1.0"
+description = "Celery worker for Volley Intelligence pipeline jobs."
+requires-python = ">=3.11,<3.12"
+dependencies = [
+  "volley-domain",
+  "celery>=5.4",
+  "redis>=5.0",
+  "sqlalchemy>=2.0,<3.0",
+  "psycopg[binary]>=3.2",
+  "pydantic-settings>=2.4",
+  "structlog>=24.4",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/volley_worker"]
+
+[tool.uv.sources]
+volley-domain = { workspace = true }
+
+[dependency-groups]
+dev = [
+  "pytest>=8.0",
+]

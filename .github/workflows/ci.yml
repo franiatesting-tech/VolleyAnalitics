@@ -1,0 +1,221 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    name: Python (ruff, typecheck, pytest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "0.12.7"
+
+      - name: Set up Python 3.11
+        run: uv python install 3.11
+
+      - name: Install dependencies
+        run: uv sync --all-packages
+
+      - name: Ruff lint
+        run: uv run ruff check .
+
+      - name: Ruff format check
+        run: uv run ruff format --check .
+
+      - name: Type check (pyright)
+        run: uv run --with pyright pyright packages/domain-py/src services/api/src services/worker/src
+
+      - name: Test domain-py
+        run: uv run --package volley-domain pytest packages/domain-py/tests -q
+
+      - name: Test worker
+        env:
+          DATABASE_URL: "sqlite:///:memory:"
+          VALKEY_URL: "redis://localhost:6379/0"
+          ENV: test
+        run: uv run --package volley-worker pytest services/worker/tests -q
+
+      - name: Test api
+        run: uv run --package volley-api pytest services/api/tests -q
+
+      - name: Verify alembic migration is offline-generatable
+        working-directory: services/api
+        env:
+          DATABASE_URL: "postgresql://volley:volley@localhost/volley"
+          VALKEY_URL: "redis://localhost:6379/0"
+          AUTH_JWKS_URL: "http://localhost/jwks"
+          AUTH_ISSUER: "http://localhost"
+          AUTH_AUDIENCE: "volley-api"
+        run: uv run --project .. --package volley-api alembic upgrade head --sql
+
+  web:
+    name: Web (lint, typecheck, vitest, build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "0.12.7"
+      - run: uv python install 3.11
+      - name: Install Python dependencies (needed to export the OpenAPI schema)
+        run: uv sync --all-packages
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate API contracts from OpenAPI
+        run: pnpm gen:contracts
+
+      - name: Lint
+        run: pnpm --filter web lint
+
+      - name: Typecheck
+        run: pnpm --filter web typecheck
+
+      - name: Unit tests (Vitest)
+        run: pnpm --filter web test -- --run
+
+      - name: Build
+        run: pnpm --filter web build
+        env:
+          # Placeholder values sufficient for a production build -- no live
+          # backend needed to compile. Real values are injected at deploy time.
+          NEXT_PUBLIC_API_URL: "http://localhost:8000"
+          BETTER_AUTH_URL: "http://localhost:3000"
+          BETTER_AUTH_SECRET: "ci-build-placeholder-not-a-real-secret"
+          DATABASE_URL: "postgresql://volley:volley@localhost:5432/volley"
+
+  e2e-smoke:
+    name: E2E smoke (Playwright)
+    runs-on: ubuntu-latest
+    needs: [python, web]
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: volley
+          POSTGRES_PASSWORD: volley
+          POSTGRES_DB: volley
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U volley -d volley"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      valkey:
+        image: valkey/valkey:8-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "valkey-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: corepack enable
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "0.12.7"
+      - run: uv python install 3.11
+
+      - name: Install Python dependencies
+        run: uv sync --all-packages
+
+      - name: Install web dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate API contracts from OpenAPI
+        run: pnpm gen:contracts
+
+      - name: Run Alembic migrations
+        working-directory: services/api
+        env:
+          DATABASE_URL: "postgresql://volley:volley@localhost:5432/volley"
+          VALKEY_URL: "redis://localhost:6379/0"
+          AUTH_JWKS_URL: "http://localhost:3000/api/auth/jwks"
+          AUTH_ISSUER: "http://localhost:3000"
+          AUTH_AUDIENCE: "volley-api"
+        run: uv run --project .. --package volley-api alembic upgrade head
+
+      - name: Start API
+        working-directory: services/api
+        env:
+          ENV: development
+          DATABASE_URL: "postgresql://volley:volley@localhost:5432/volley"
+          VALKEY_URL: "redis://localhost:6379/0"
+          AUTH_JWKS_URL: "http://localhost:3000/api/auth/jwks"
+          AUTH_ISSUER: "http://localhost:3000"
+          AUTH_AUDIENCE: "volley-api"
+          CORS_ALLOWED_ORIGINS: "http://localhost:3000"
+        run: uv run --project .. --package volley-api uvicorn volley_api.main:app --host 0.0.0.0 --port 8000 &
+
+      - name: Start worker
+        working-directory: services/worker
+        env:
+          ENV: development
+          DATABASE_URL: "postgresql://volley:volley@localhost:5432/volley"
+          VALKEY_URL: "redis://localhost:6379/0"
+        run: uv run --project .. --package volley-worker celery -A volley_worker.celery_app.celery_app worker --loglevel=info &
+
+      - name: Install Playwright browsers
+        run: pnpm --filter web exec playwright install --with-deps chromium
+
+      - name: Migrate Better Auth's schema
+        working-directory: apps/web
+        env:
+          BETTER_AUTH_URL: "http://localhost:3000"
+          BETTER_AUTH_SECRET: "ci-e2e-not-a-real-secret"
+          DATABASE_URL: "postgresql://volley:volley@localhost:5432/volley"
+        run: pnpm auth:migrate
+
+      - name: Build and start web
+        working-directory: apps/web
+        env:
+          NEXT_PUBLIC_API_URL: "http://localhost:8000"
+          BETTER_AUTH_URL: "http://localhost:3000"
+          BETTER_AUTH_SECRET: "ci-e2e-not-a-real-secret"
+          DATABASE_URL: "postgresql://volley:volley@localhost:5432/volley"
+          # Must match the API's AUTH_ISSUER/AUTH_AUDIENCE above exactly --
+          # otherwise Better Auth mints tokens with a default `aud` (its own
+          # base URL) that services/api's JWT verification rejects, and
+          # every authenticated call 401s. See ADR-003.
+          AUTH_ISSUER: "http://localhost:3000"
+          AUTH_AUDIENCE: "volley-api"
+        run: |
+          pnpm build
+          pnpm start &
+
+      - name: Wait for services
+        run: |
+          npx wait-on http://localhost:8000/healthz http://localhost:3000 --timeout 60000
+
+      - name: Run Playwright smoke test
+        env:
+          # playwright.config.ts only spawns its own `pnpm dev` webServer
+          # when this is unset -- we already built+started the production
+          # server above, so point Playwright at it instead of racing a
+          # second server onto the same port.
+          PLAYWRIGHT_BASE_URL: "http://localhost:3000"
+        run: pnpm --filter web exec playwright test --grep @smoke

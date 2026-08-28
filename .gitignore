@@ -1,3 +1,8 @@
+# --- Generated contracts (packages/contracts) -- regenerate via
+# `pnpm gen:contracts`, never hand-edit or commit these ---
+packages/contracts/openapi.json
+packages/contracts/src/schema.d.ts
+
 # --- Node / Next.js (apps/web) ---
 node_modules/
 .next/

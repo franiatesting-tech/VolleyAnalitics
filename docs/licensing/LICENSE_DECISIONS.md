@@ -69,6 +69,22 @@ A log of explicit decisions made about dependencies whose license required revie
 - **Date:** 2026-08-28
 - **Revisit condition:** none anticipated; monitor post-acquisition roadmap changes informally.
 
+## D-009: psycopg — approved for use as a sync Postgres driver
+
+- **Decision:** `psycopg[binary]` is approved for use in `services/api` (Alembic's sync migration tooling) and `services/worker` (sync Celery tasks). No further review needed unless static linking or redistribution of a modified psycopg is ever considered.
+- **Rationale:** LGPL-3.0-only, verified directly against the installed package's metadata (`psycopg-*.dist-info/METADATA` → `License-Expression: LGPL-3.0-only`), not assumed from name recognition. LGPL's obligations (dynamic linking, notice retention, ability to relink against a modified psycopg) are satisfied automatically here: this project consumes psycopg as an unmodified PyPI dependency via normal Python imports (dynamic by construction — Python doesn't static-link C extensions into the application binary the way a compiled language would), ships no modified fork of it, and Python's own import mechanism already allows an end user to swap in a different psycopg version. This is a materially different compliance situation from FFmpeg (D-006), where static-vs-dynamic linking is a real developer choice with real consequences — there is no equivalent choice being made here.
+- **Decided by:** Claude Code (architecture-lead / security-privacy-license-reviewer role), following up on a gap an independent Phase 1 review found: psycopg had been added and used for a full session with no license review at all.
+- **Date:** 2026-08-28
+- **Revisit condition:** if psycopg is ever vendored, patched, or statically bundled (e.g. into a compiled artifact) rather than consumed as a normal PyPI dependency — re-review under the same lens as D-006.
+
+## D-010: process gap — Phase 1 dependencies were added before the license gate ran
+
+- **Decision:** No dependency added in the Phase 1 session needs to be removed — all were independently re-verified after the fact (see `OSS_MANIFEST.md`'s Frontend/Backend tables, updated 2026-08-28) and all are Safe except psycopg (D-009, now closed) and the already-tracked FFmpeg question (D-006, still open). This entry exists to record that the *process* failed, not just to close the individual dependencies out.
+- **Rationale:** CLAUDE.md's licensing gate is written as "before adding," not "before shipping" — dozens of real dependencies (FastAPI, Celery, Better Auth, Radix UI, pytest-asyncio, etc.) were added across the Phase 1 session with the gate never invoked, and it took an independent qa-release-engineer review to catch it. Retroactive review is strictly worse than upfront review: it's how a real license problem (had one existed, and psycopg came close to being exactly that) would have shipped and been discovered late instead of prevented.
+- **Decided by:** Claude Code (architecture-lead), following the independent QA review's finding.
+- **Date:** 2026-08-28
+- **Revisit condition:** none — this is a standing process note, not a dependency decision. The fix is behavioral: run `.claude/skills/oss-license-gate` at the moment of `uv add`/`pnpm add`, not at the end of a phase. Worth a `PreToolUse` hook enhancement (extending `.claude/hooks/license_gate_check.py`'s blocklist-based check into a "new dependency detected, was it reviewed?" nudge) if this recurs.
+
 ---
 
 ## Template for new entries

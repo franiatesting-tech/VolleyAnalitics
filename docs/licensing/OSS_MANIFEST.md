@@ -2,6 +2,8 @@
 
 Every third-party dependency (library, model, dataset) considered for the production stack, with its verified license. This is the factual record; `LICENSE_DECISIONS.md` records the *decisions* made on top of these facts. Verified 2026-08-28 by direct inspection of each repository's LICENSE file (via GitHub, not search snippets) unless noted otherwise. Re-verify before upgrading a major version or if a dependency changes ownership.
 
+**Process note (2026-08-28):** the Phase 1 implementation session added dozens of real runtime dependencies (`pnpm-lock.yaml`, `uv.lock`) without running this gate at the time — an independent architecture/QA review caught the gap, including one real LGPL dependency (`psycopg`) that had gone completely unreviewed. The tables below were backfilled from the actual lockfiles after the fact. Going forward: run `oss-license-gate` (see `.claude/skills/oss-license-gate/SKILL.md`) *before* `uv add`/`pnpm add`, not after — see `LICENSE_DECISIONS.md` D-010.
+
 ## Policy reminder
 
 - **Allow by default:** MIT, BSD, Apache-2.0, ISC
@@ -15,15 +17,25 @@ Every third-party dependency (library, model, dataset) considered for the produc
 | Next.js 16.x | MIT | Safe | |
 | React 19 | MIT | Safe | |
 | Tailwind CSS | MIT | Safe | |
-| shadcn/ui | MIT | Safe | code-generation model (copied into your repo), not a runtime dependency — you own the copied code |
-| Base UI | MIT | Safe | |
-| D3 | ISC | Safe | |
-| Three.js | MIT | Safe | |
-| React Three Fiber | MIT | Safe | |
-| Motion (Framer Motion successor) | MIT | Safe | |
-| Lucide | ISC | Safe | |
+| shadcn/ui | MIT | Safe | code-generation model (copied into your repo), not a runtime dependency — you own the copied code. The CLI itself failed to run in Phase 1 (a broken transient `chalk`/`ora` install); components under `apps/web/src/components/ui` were hand-written in the same Radix+CVA+Tailwind style instead. |
+| Radix UI (`@radix-ui/react-{label,progress,slot,tabs}`) | MIT | Safe | what's actually installed — supersedes an earlier "Base UI" placeholder entry in this manifest, which was never actually added |
+| class-variance-authority | Apache-2.0 | Safe | |
+| clsx | MIT | Safe | |
+| tailwind-merge | MIT | Safe | |
+| tw-animate-css | MIT | Safe | |
+| D3 | ISC | Safe | installed in Phase 1 (pulled in ahead of Phase 3's dataviz work); not yet used by any component |
+| Three.js | MIT | Safe | not yet installed — pre-cleared, only when 3D encodes real information per ADR-001 |
+| React Three Fiber | MIT | Safe | not yet installed — pre-cleared alongside Three.js |
+| Motion (`motion` package, Framer Motion successor) | MIT | Safe | installed; used for `prefers-reduced-motion`-aware transitions |
+| Lucide (`lucide-react`) | ISC | Safe | |
 | TanStack Query | MIT | Safe | |
-| Better Auth | MIT | Safe | verify at integration time — check for any dual-licensed enterprise-only plugins before depending on them |
+| Better Auth | MIT | Safe | Organizations + JWT plugins in use as of Phase 1; no enterprise-only plugin depended on |
+| pg (node-postgres) | MIT | Safe | Better Auth's Postgres adapter driver |
+| @playwright/test | Apache-2.0 | Safe | dev-only (E2E) |
+| Vitest | MIT | Safe | dev-only |
+| jsdom | MIT | Safe | dev-only (Vitest test environment) |
+| @testing-library/react, @testing-library/jest-dom | MIT | Safe | dev-only |
+| eslint-config-next | MIT | Safe | dev-only |
 
 ## Backend
 
@@ -31,13 +43,27 @@ Every third-party dependency (library, model, dataset) considered for the produc
 |---|---|---|---|
 | FastAPI | MIT | Safe | |
 | Pydantic v2 | MIT | Safe | |
+| pydantic-settings | MIT | Safe | |
 | SQLAlchemy 2 | MIT | Safe | |
 | Alembic | MIT | Safe | |
 | PostgreSQL | PostgreSQL License (permissive, BSD/MIT-like) | Safe | |
+| asyncpg | Apache-2.0 | Safe | API's async Postgres driver |
+| **psycopg[binary]** | **LGPL-3.0-only** | **Needs review — see LICENSE_DECISIONS.md D-009** | sync Postgres driver, used by Alembic (sync-only tooling) and the worker. Verified directly against installed package metadata (`psycopg-*.dist-info/METADATA` → `License-Expression: LGPL-3.0-only`), not assumed. |
 | Celery | BSD-3-Clause | Safe | |
 | Valkey | **BSD-3-Clause** | Safe | Linux Foundation fork of Redis 7.2.4, created after Redis Inc. moved to source-available dual RSALv2/SSPLv1 licensing (current Redis, 7.4+, is **not** safe to embed — use Valkey, not Redis). Verified against `COPYING` file. |
+| redis (Python client) | MIT | Safe | client library for Valkey/Redis wire protocol — distinct artifact from the Redis *server*, which is what the Valkey entry above is about. Do not conflate the two when reading this table. |
+| uvicorn | BSD-3-Clause | Safe | ASGI server |
+| PyJWT (`pyjwt[crypto]`) | MIT | Safe | JWT verification; `[crypto]` extra pulls in `cryptography` (Apache-2.0/BSD dual) |
+| httpx | BSD-3-Clause | Safe | |
+| structlog | MIT/Apache-2.0 dual | Safe | |
+| hatchling | MIT | Safe | build backend, dev-only |
+| aiosqlite | MIT | Safe | dev-only (API test suite) |
+| pytest-asyncio | Apache-2.0 | Safe | dev-only |
 | pytest | MIT | Safe | |
 | Ruff | MIT | Safe | |
+| pyright | MIT | Safe | dev-only, run via `uv run --with pyright` (not a project dependency) |
+| openapi-typescript | MIT | Safe | dev-only, `packages/contracts` codegen |
+| openapi-fetch | MIT | Safe | `packages/contracts` runtime client |
 
 ## Computer vision / ML
 
