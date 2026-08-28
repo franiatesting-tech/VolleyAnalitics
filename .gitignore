@@ -1,0 +1,51 @@
+# --- Node / Next.js (apps/web) ---
+node_modules/
+.next/
+out/
+.turbo/
+*.tsbuildinfo
+.pnpm-store/
+
+# --- Python (services/api, services/worker, ml/*) ---
+__pycache__/
+*.pyc
+.venv/
+.uv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# --- Env / secrets ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+
+# --- Data / media (never committed; see docs/architecture/DATA_FLOW.md) ---
+*.mp4
+*.mov
+*.mkv
+*.avi
+data/raw/
+data/proxy/
+data/frames/
+*.pt
+*.pth
+*.onnx
+*.engine
+mlruns/
+.dvc/cache/
+.dvc/tmp/
+
+# --- OS / editor ---
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# --- Logs ---
+*.log
+logs/
