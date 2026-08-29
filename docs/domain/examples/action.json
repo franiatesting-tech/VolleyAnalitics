@@ -1,0 +1,21 @@
+{
+  "id": "785d0f0d-a1a8-4542-8b83-d5f20bb7210f",
+  "phase_id": "fd695ae0-213e-46c5-b8c8-0e4b9879b31e",
+  "rally_id": "fa03f048-f996-447e-87c9-efe3a5651ee9",
+  "action_type": "attack",
+  "actor_team_id": "d7e9cb97-3ab1-4291-8c00-e0737faafec9",
+  "actor_roster_id": "9e017dae-1d54-445e-9f29-93ca5cf60506",
+  "video_t_start": 1.6,
+  "video_t_end": 2.1,
+  "court_x": 0.17,
+  "court_y": 0.42,
+  "confidence": 0.943,
+  "model_run_id": "fc8c9795-9811-4b98-8e22-c9fa4a2d44b1",
+  "reviewed_status": "unreviewed",
+  "quality_rating": null,
+  "outcome": {
+    "id": "2a737c38-dbef-4fb7-a1ba-d66a89a6ed3f",
+    "result": "continue",
+    "detail": null
+  }
+}

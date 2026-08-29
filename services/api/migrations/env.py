@@ -1,8 +1,8 @@
-"""Alembic env. Owns only volley_domain.models' tables -- never Better
-Auth's own tables (see CLAUDE.md's auth ownership rule). Uses a sync
-psycopg driver for migrations even though the app runs asyncpg at request
-time; that's a normal, deliberate split (Alembic's autogenerate/offline
-tooling assumes sync).
+"""Alembic env. Owns volley_domain.models' and volley_domain.ontology's
+tables -- never Better Auth's own tables (see CLAUDE.md's auth ownership
+rule). Uses a sync psycopg driver for migrations even though the app runs
+asyncpg at request time; that's a normal, deliberate split (Alembic's
+autogenerate/offline tooling assumes sync).
 """
 
 from logging.config import fileConfig
@@ -10,7 +10,11 @@ from logging.config import fileConfig
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 from volley_api.core.config import get_settings
-from volley_domain.models import Base
+
+# Importing volley_domain (not just volley_domain.models) registers every
+# table -- both models.py and ontology.py -- on the shared Base before
+# target_metadata is read below. See volley_domain/__init__.py's docstring.
+from volley_domain import Base
 
 config = context.config
 

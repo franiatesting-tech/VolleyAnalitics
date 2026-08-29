@@ -11,6 +11,17 @@ came from real video.
 Determinism: identical `seed` always produces an identical SyntheticMatch.
 Uses only `random.Random(seed)`, no global random state, no wall-clock
 inputs except `generated_at` (which is metadata, not simulation input).
+
+Court coordinates: every action/position uses `court.ZONE_ANCHORS` directly,
+unmirrored, for both teams -- per volley_domain.stats.records.ActionRecord's
+documented contract that court_x/court_y are always in the *acting team's
+own* attacking frame. An earlier version called `court.zone_anchor(zone,
+team)`, which mirrors for the away team -- that silently broke every
+away-team zone statistic (a zone-1 serve was reported as zone 4), caught by
+independent architecture review with a live reproduction, not by any test.
+Mirroring (`court.mirror_for_away`) remains available for rendering both
+teams on one shared visual frame later -- it must never be baked into what
+gets persisted as ground truth.
 """
 
 from __future__ import annotations
@@ -18,6 +29,7 @@ from __future__ import annotations
 import random
 from datetime import UTC, datetime
 
+from volley_domain.court import ZONE_ANCHORS, Zone
 from volley_domain.schemas import (
     ActionOutcome,
     ActionType,
@@ -37,30 +49,11 @@ from volley_domain.schemas import (
 
 _POSITIONS: list[RosterPosition] = ["OH", "OH", "MB", "MB", "S", "OP", "L"]  # 7-player roster shape
 
-# Base court "home" zone anchors per rotation slot (normalized 0..1), own side.
-# Zones 1-6 per standard volleyball numbering (1=back-right/server, going
-# counter-clockwise). Attacking team occupies y in [0, 0.5), defending [0.5, 1).
-_ZONE_ANCHORS = {
-    1: (0.83, 0.92),
-    2: (0.83, 0.58),
-    3: (0.5, 0.58),
-    4: (0.17, 0.58),
-    5: (0.17, 0.92),
-    6: (0.5, 0.92),
-}
-
 
 def _det_id(rng: random.Random) -> str:
     """Deterministic pseudo-UUID drawn from the seeded RNG -- module-level
     uuid.uuid4() reads OS entropy and would silently break determinism."""
     return f"{rng.getrandbits(128):032x}"
-
-
-def _mirror_for_away(x: float, y: float) -> tuple[float, float]:
-    """Away team's own-side rendering mirrors home's, per DATA_FLOW.md's
-    normalized-coordinate convention (reflect across both axes so each
-    team's attack always reads as "toward y=0" in its own frame)."""
-    return 1.0 - x, 1.0 - y
 
 
 def _make_roster(rng: random.Random, team_name: str) -> TeamRoster:
@@ -97,6 +90,16 @@ def _build_action_chain(
     point_winner: Team,
     rosters: dict[Team, TeamRoster],
 ) -> list[SyntheticAction]:
+    """Actions' t_start/t_end are deliberately rally-relative (0.0 at the
+    rally's first action), matching PlayerPositionSample.t's "seconds from
+    rally start" contract and keeping ball-position sampling (which derives
+    its own timestamps from these) internally consistent. The match-
+    absolute clock (SyntheticRally.match_t_start/end) is tracked separately
+    at the _simulate_set level, not threaded into this function -- an
+    earlier draft of this fix tried offsetting `t` here directly, which
+    would have made ball-position timestamps match-absolute while
+    player-position timestamps stayed rally-relative, a new inconsistency
+    within the same rally. Caught before it shipped."""
     actions: list[SyntheticAction] = []
     t = 0.0
 
@@ -129,7 +132,7 @@ def _build_action_chain(
     server_roster = rosters[serving_team]
     receiver_roster = rosters[receiving_team]
     server = _pick(rng, [p for p in server_roster.players if p.position != "L"])
-    serve_xy = _ZONE_ANCHORS[1] if serving_team == "home" else _mirror_for_away(*_ZONE_ANCHORS[1])
+    serve_xy = ZONE_ANCHORS[1]
 
     # Rally length: mostly short (ace / serve error / quick kill), sometimes long.
     rally_shape = rng.choices(["ace", "serve_error", "short", "long"], weights=[10, 6, 54, 30])[0]
@@ -146,9 +149,7 @@ def _build_action_chain(
 
     libero = _players_by_position(receiver_roster, "L")
     receiver = libero[0] if libero and rng.random() < 0.6 else _pick(rng, receiver_roster.players)
-    recv_zone = (
-        _ZONE_ANCHORS[5] if receiving_team == "home" else _mirror_for_away(*_ZONE_ANCHORS[5])
-    )
+    recv_zone = ZONE_ANCHORS[5]
     add("reception", receiving_team, receiver, 0.4, "continue", recv_zone)
 
     exchanges = 1 if rally_shape == "short" else rng.randint(2, 4)
@@ -158,21 +159,16 @@ def _build_action_chain(
         setter = _pick(
             rng, _players_by_position(rosters[current_team], "S") or rosters[current_team].players
         )
-        set_zone = (
-            _ZONE_ANCHORS[3] if current_team == "home" else _mirror_for_away(*_ZONE_ANCHORS[3])
-        )
+        set_zone = ZONE_ANCHORS[3]
         add("set", current_team, setter, 0.3, "continue", set_zone)
 
         attacker_pool = [
             p for p in rosters[current_team].players if p.position in ("OH", "OP", "MB")
         ]
         attacker = _pick(rng, attacker_pool)
-        attack_zone_key = rng.choice([2, 3, 4])
-        attack_zone = (
-            _ZONE_ANCHORS[attack_zone_key]
-            if current_team == "home"
-            else _mirror_for_away(*_ZONE_ANCHORS[attack_zone_key])
-        )
+        attack_zone_options: list[Zone] = [2, 3, 4]
+        attack_zone_key = rng.choice(attack_zone_options)
+        attack_zone = ZONE_ANCHORS[attack_zone_key]
         is_last_exchange = exchange_i == exchanges - 1
         if is_last_exchange:
             attack_outcome = "point" if point_winner == current_team else "error"
@@ -186,9 +182,7 @@ def _build_action_chain(
                 return actions
             add("attack", current_team, attacker, 0.5, "continue", attack_zone)
             defender = _pick(rng, rosters[other_team].players)
-            def_zone = (
-                _ZONE_ANCHORS[6] if other_team == "home" else _mirror_for_away(*_ZONE_ANCHORS[6])
-            )
+            def_zone = ZONE_ANCHORS[6]
             def_type_options: list[ActionType] = ["block", "dig"]
             def_type = rng.choice(def_type_options)
             def_outcome = "error" if def_type == "block" else "continue"
@@ -205,20 +199,22 @@ def _build_action_chain(
             )
             return actions
         else:
+            # Exactly 3 team touches per exchange: set + attack (above) by
+            # current_team, then dig by other_team. Do NOT add a further
+            # standalone "transition" action here -- an earlier version did,
+            # which meant this team's *next* iteration set+attack (as the
+            # new current_team) landed as a 4th consecutive same-team touch
+            # with no intervening contact from the opponent, violating the
+            # real 3-touches-per-side rule (FIVB 9.3). Caught by independent
+            # domain review, not by any test -- persistence tests checked
+            # row counts/phase grouping/coordinates but never contact-count
+            # legality. The dig below is this team's *first* touch of their
+            # next possession; their following set+attack (added at the top
+            # of the next loop iteration) are touches 2 and 3.
             add("attack", current_team, attacker, 0.5, "continue", attack_zone)
             defender = _pick(rng, rosters[other_team].players)
-            def_zone = (
-                _ZONE_ANCHORS[6] if other_team == "home" else _mirror_for_away(*_ZONE_ANCHORS[6])
-            )
+            def_zone = ZONE_ANCHORS[6]
             add("dig", other_team, defender, 0.3, "continue", def_zone)
-            add(
-                "transition",
-                other_team,
-                _pick(rng, rosters[other_team].players),
-                0.2,
-                "continue",
-                def_zone,
-            )
             current_team, other_team = other_team, current_team
 
     return actions
@@ -229,11 +225,11 @@ def _sample_player_positions(
 ) -> list[PlayerPositionSample]:
     samples: list[PlayerPositionSample] = []
     base_by_player: dict[str, tuple[float, float, Team]] = {}
+    court_slots: list[Zone] = [1, 2, 3, 4, 5, 6]
     for team_key, roster in rosters.items():
         on_court = roster.players[:6]  # simplified: first 6 of 7 are "on court" this rally
-        for slot, player in enumerate(on_court, start=1):
-            anchor = _ZONE_ANCHORS[slot]
-            xy = anchor if team_key == "home" else _mirror_for_away(*anchor)
+        for slot, player in zip(court_slots, on_court, strict=False):
+            xy = ZONE_ANCHORS[slot]
             base_by_player[player.id] = (*xy, team_key)
 
     for i in range(n_samples):
@@ -287,6 +283,9 @@ def _sample_ball_positions(
     return samples
 
 
+_INTER_RALLY_GAP_SECONDS = 3.0  # referee reset / next-serve setup, deterministic (not rng-driven)
+
+
 def _simulate_set(
     rng: random.Random,
     set_index: int,
@@ -294,12 +293,18 @@ def _simulate_set(
     home_skill: float,
     is_final_set: bool,
     first_serve: Team,
-) -> SyntheticSet:
+    match_clock_start: float,
+) -> tuple[SyntheticSet, float]:
+    """Returns the set and the match clock's position after it, so the
+    caller can carry it into the next set -- see match_clock in
+    generate_synthetic_match. `match_clock_start` is this set's own start
+    position on that same running clock (seconds since set 1 began)."""
     target = 15 if is_final_set else 25
     home_points = 0
     away_points = 0
     serving_team = first_serve
     rallies: list[SyntheticRally] = []
+    match_clock = match_clock_start
 
     while True:
         leading = max(home_points, away_points)
@@ -327,8 +332,11 @@ def _simulate_set(
             player_positions=_sample_player_positions(rng, rosters, duration, n_samples=6),
             ball_positions=_sample_ball_positions(rng, actions),
             duration_seconds=duration,
+            match_t_start=round(match_clock, 3),
+            match_t_end=round(match_clock + duration, 3),
         )
         rallies.append(rally)
+        match_clock += duration + _INTER_RALLY_GAP_SECONDS
 
         if point_winner == "home":
             home_points += 1
@@ -337,11 +345,12 @@ def _simulate_set(
         serving_team = point_winner  # winner serves next
 
     winner = "home" if home_points > away_points else "away"
-    return SyntheticSet(
+    played_set = SyntheticSet(
         index=set_index,
         score=SyntheticSetScore(home_points=home_points, away_points=away_points, winner=winner),
         rallies=rallies,
     )
+    return played_set, match_clock
 
 
 def generate_synthetic_match(
@@ -362,10 +371,13 @@ def generate_synthetic_match(
     home_sets_won = 0
     away_sets_won = 0
     set_index = 0
+    match_clock = 0.0  # seconds since set 1's first serve; carries across sets
     while home_sets_won < 3 and away_sets_won < 3:
         is_final = home_sets_won == 2 and away_sets_won == 2
         first_serve: Team = "home" if set_index % 2 == 0 else "away"
-        played_set = _simulate_set(rng, set_index, rosters, home_skill, is_final, first_serve)
+        played_set, match_clock = _simulate_set(
+            rng, set_index, rosters, home_skill, is_final, first_serve, match_clock
+        )
         sets.append(played_set)
         if played_set.score.winner == "home":
             home_sets_won += 1

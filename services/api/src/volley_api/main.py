@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from volley_api.api.routes import health, matches
+from volley_api.api.routes import health, matches, ontology
 from volley_api.core.config import get_settings
 from volley_api.core.errors import register_exception_handlers
 from volley_api.core.logging import configure_logging
@@ -29,3 +29,4 @@ register_exception_handlers(app)
 
 app.include_router(health.router)
 app.include_router(matches.router)
+app.include_router(ontology.router)

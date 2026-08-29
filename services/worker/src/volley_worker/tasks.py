@@ -1,13 +1,24 @@
-"""PROCESS_DEMO_MATCH: the Phase-1 stand-in pipeline job. Generates a
-deterministic synthetic match (see volley_domain.synthetic) and persists it,
-so the rest of the product (Match Analysis, Rally Explorer, stats views) can
-be built before any real CV pipeline exists.
+"""PROCESS_DEMO_MATCH: the Phase-1/2 stand-in pipeline job. Generates a
+deterministic synthetic match (see volley_domain.synthetic) and persists it
+into the real ontology (Team/Roster/MatchSet/Rally/Phase/Action/Outcome --
+see docs/domain/ONTOLOGY.md), so the rest of the product (Match Analysis,
+Rally Explorer, stats views) can be built before any real CV pipeline
+exists. `result_data` (the Phase 1 JSON blob) is still written too, purely
+because the already-shipped API/frontend read from it -- see
+docs/architecture/adr/ADR-004-volleyball-ontology.md for why both coexist
+for now rather than migrating the read path in the same change.
 
 Idempotency / no-duplicate-results: the task is looked up by `dedup_key`
 (one row per match, created by the API before enqueueing -- see
 services/api/src/volley_api/api/routes/matches.py). If that row is already
 COMPLETED with result data, this is a no-op: a redelivered/retried Celery
 message must never regenerate a different result or create a second job row.
+Ontology persistence and the COMPLETED status flip happen inside one
+transaction (see the final `with session_scope()` block below) specifically
+so a failure partway through persistence rolls back cleanly -- a retry
+re-runs from a clean slate instead of double-writing Team/Roster/Rally rows
+(persist_synthetic_match itself has no dedup check; this transaction
+boundary is what keeps retries safe).
 
 Retry policy: every exception in the try block below is caught and turned
 into a manual `self.retry()` -- deliberately, so a transient DB/broker
@@ -22,6 +33,7 @@ import hashlib
 import structlog
 from volley_domain.models import JobStatus, Match, MatchStatus, ProcessingJob
 from volley_domain.synthetic import generate_synthetic_match
+from volley_domain.synthetic.persistence import persist_synthetic_match
 from volley_domain.tasks import PROCESS_DEMO_MATCH_TASK_NAME
 
 from volley_worker.celery_app import celery_app
@@ -65,8 +77,12 @@ def process_demo_match(self, match_id: str, dedup_key: str) -> dict:
         job.celery_task_id = self.request.id
 
         match = db.get(Match, match_id)
-        home_team = match.home_team if match else "Home"
-        away_team = match.away_team if match else "Away"
+        if match is None:
+            log.error("process_demo_match_missing_match_row")
+            raise ValueError(f"No Match found for match_id={match_id}")
+        home_team = match.home_team
+        away_team = match.away_team
+        organization_id = match.organization_id
 
     try:
         synthetic = generate_synthetic_match(
@@ -75,17 +91,24 @@ def process_demo_match(self, match_id: str, dedup_key: str) -> dict:
 
         with session_scope() as db:
             job = db.query(ProcessingJob).filter_by(dedup_key=dedup_key).one()
-            job.progress = 70
-            job.stage = "saving"
+            job.progress = 50
+            job.stage = "persisting"
 
         result_data = synthetic.model_dump(mode="json")
 
+        # One transaction: ontology persistence + status flips, so a
+        # partway failure rolls back cleanly (see module docstring).
         with session_scope() as db:
+            pipeline_run = persist_synthetic_match(
+                db, organization_id=organization_id, match_id=match_id, synthetic=synthetic
+            )
+
             job = db.query(ProcessingJob).filter_by(dedup_key=dedup_key).one()
             job.status = JobStatus.COMPLETED
             job.progress = 100
             job.stage = "completed"
             job.result_data = result_data
+            job.pipeline_run_id = pipeline_run.id
 
             match = db.get(Match, match_id)
             if match:

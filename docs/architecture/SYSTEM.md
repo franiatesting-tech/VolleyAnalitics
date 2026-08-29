@@ -1,6 +1,6 @@
 # System Architecture
 
-Full rationale lives in `docs/architecture/adr/ADR-001-foundational-architecture.md` (stack), `ADR-002` (monorepo/Python-package structure), `ADR-003` (the JWT contract between web and api). This document is the current-state map; keep it in sync with reality, not aspiration.
+Full rationale lives in `docs/architecture/adr/ADR-001-foundational-architecture.md` (stack), `ADR-002` (monorepo/Python-package structure), `ADR-003` (the JWT contract between web and api), `ADR-004` (the volleyball domain ontology, statistics engine, and lineage). This document is the current-state map; keep it in sync with reality, not aspiration.
 
 ## Components
 

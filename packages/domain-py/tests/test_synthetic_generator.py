@@ -1,3 +1,4 @@
+from volley_domain.court import nearest_zone
 from volley_domain.synthetic.generator import generate_synthetic_match
 
 
@@ -82,3 +83,57 @@ def test_summary_matches_full_match():
     summary = match.summary()
     assert summary.total_rallies == sum(len(s.rallies) for s in match.sets)
     assert summary.sets_won_home + summary.sets_won_away == len(match.sets)
+
+
+def test_serve_zone_attribution_is_identical_for_both_teams():
+    """A serve from a team's own zone-1 anchor must resolve to zone 1
+    regardless of which team served -- an earlier version mirrored the
+    away team's coordinates, so an away-team zone-1 serve was reported as
+    zone 4, silently corrupting every away-team zone statistic. Caught by
+    independent architecture review with a live reproduction (measured on
+    seed 42), not by any test until this one. See
+    volley_domain.stats.records.ActionRecord's documented "own frame,
+    unmirrored" contract."""
+    for seed in range(10):
+        match = generate_synthetic_match(seed=seed)
+        home_serve_zones = {
+            nearest_zone(a.court_x, a.court_y, "home")
+            for s in match.sets
+            for r in s.rallies
+            for a in r.actions
+            if a.type == "serve" and a.actor_team == "home"
+        }
+        away_serve_zones = {
+            nearest_zone(a.court_x, a.court_y, "home")
+            for s in match.sets
+            for r in s.rallies
+            for a in r.actions
+            if a.type == "serve" and a.actor_team == "away"
+        }
+        assert home_serve_zones == {1}, f"seed={seed}: home not all zone 1: {home_serve_zones}"
+        assert away_serve_zones == {1}, f"seed={seed}: away not all zone 1: {away_serve_zones}"
+
+
+def test_no_team_ever_makes_more_than_three_consecutive_contacts():
+    """FIVB Rule 9.3: a team may not contact the ball more than three times
+    (not counting a block touch) before it must cross the net. An earlier
+    version of the exchange loop produced a real violation of this (dig ->
+    transition -> set -> attack, 4 consecutive same-team touches) that no
+    test caught until an independent domain review traced it by hand -- see
+    ADR-004 / PROJECT_STATUS.md. This test exists specifically so that
+    regression can never ship silently again."""
+    for seed in range(30):
+        match = generate_synthetic_match(seed=seed)
+        for s in match.sets:
+            for rally in s.rallies:
+                consecutive = 1
+                for i in range(1, len(rally.actions)):
+                    if rally.actions[i].actor_team == rally.actions[i - 1].actor_team:
+                        consecutive += 1
+                        assert consecutive <= 3, (
+                            f"seed={seed} rally={rally.id}: team "
+                            f"{rally.actions[i].actor_team!r} made {consecutive} "
+                            f"consecutive contacts (actions {[a.type for a in rally.actions]})"
+                        )
+                    else:
+                        consecutive = 1

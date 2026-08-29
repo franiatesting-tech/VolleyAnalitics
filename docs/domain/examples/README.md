@@ -1,0 +1,10 @@
+# Example objects
+
+Real serialized objects, produced by actually running `generate_synthetic_match` → `persist_synthetic_match` → the domain services (`corrections.py`, `lineage.py`) against a live (SQLite) database and dumping the results — not hand-typed. See `docs/domain/ONTOLOGY.md` for what each field means.
+
+- `action.json` — a single `Action` row with its `Outcome`.
+- `rally.json` — a full `Rally` with every `Action` in chronological order (`video_t_start`) — note how `phase_id` groups consecutive same-team actions into one possession segment (reception → set → attack all share a phase; the serve and the dig each start a new one), per `ONTOLOGY.md`'s Phase definition.
+- `human_correction.json` — an append-only correction record (`previous_value`/`corrected_value`), per `ONTOLOGY.md`'s "Correction semantics."
+- `derived_metric_lineage.json` — the "why does it show me 43%?" chain: `explain_metric`'s output shape linking a statistic to the actions and rallies (with clip references) that produced it. **Correction (independent architecture review, see `ADR-004`/`TECH_DEBT.md`'s "lineage helper" entry):** unlike the other three files, this one is *not* end-to-end pipeline output. `explain_metric` is a real, tested function, but nothing in the current codebase actually computes the `contributing_actions`/`clip_ref_by_rally_id` inputs it needs — the statistics engine returns aggregates only, and synthetic `Action` rows never get a real clip reference (there's no video for synthetic runs). This file was produced by calling `explain_metric` directly with hand-constructed inputs shaped like what a real caller would eventually supply, including placeholder `clip_ref` strings — it illustrates the *output shape*, not a real lineage chain that exists anywhere in the system today.
+
+Regenerate after any ontology or domain-service change that would make these stale — see the script embedded in the Prompt 2 session history, or write a small script under `tools/` if this needs to happen routinely (not yet done — low priority while these are still hand-curated illustrations, not a generated artifact like `packages/contracts`).

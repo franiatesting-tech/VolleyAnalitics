@@ -60,6 +60,8 @@ RTMPose (MMPose) run on player crops (not full frames — cheaper, more accurate
 
 ## Action recognition (`ml/actions`) + Event Engine
 
+The Event Log's real schema (`Rally`/`Phase`/`Action`/`Outcome` and the rest of the ontology) now exists — see `docs/domain/ONTOLOGY.md` and ADR-004. What's described below (rally segmentation, PoseC3D action classification from real video) is what will populate those tables in Phase 6; as of Phase 2, they're populated by the synthetic generator (`volley_domain.synthetic.persistence`) as a stand-in.
+
 1. Rally boundary detection (start/end of live play).
 2. Action segmentation within a rally.
 3. Action classification: PoseC3D (MMAction2) as the first learned model, fused with ball state, player positions/velocity, ball-player proximity, court zone, volleyball rules, and temporal state (score, rotation).

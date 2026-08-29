@@ -14,8 +14,7 @@ services/api/src/volley_api/core/auth.py.
 """
 
 import enum
-import uuid
-from datetime import UTC, datetime
+from datetime import datetime
 
 from sqlalchemy import (
     JSON,
@@ -28,19 +27,12 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
 )
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column
 
+from volley_domain.base import Base, new_id, utcnow
 
-class Base(DeclarativeBase):
-    pass
-
-
-def _uuid_str() -> str:
-    return str(uuid.uuid4())
-
-
-def _utcnow() -> datetime:
-    return datetime.now(UTC)
+_uuid_str = new_id
+_utcnow = utcnow
 
 
 class MatchStatus(enum.StrEnum):
@@ -59,6 +51,12 @@ class JobStatus(enum.StrEnum):
 
 
 class Match(Base):
+    """Phase 1 table, extended in Phase 2 (docs/domain/ONTOLOGY.md) with
+    optional links into the real ontology. `home_team`/`away_team` free-text
+    columns are kept as a display fallback: a coach uploading a video
+    shouldn't be blocked on first creating formal Team/Competition/Season
+    records, so the *_id columns below are nullable, not a replacement."""
+
     __tablename__ = "matches"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid_str)
@@ -70,6 +68,19 @@ class Match(Base):
         Enum(MatchStatus, native_enum=False, length=32), default=MatchStatus.DRAFT, nullable=False
     )
     created_by_user_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    competition_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("competitions.id", ondelete="SET NULL"), nullable=True
+    )
+    season_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("seasons.id", ondelete="SET NULL"), nullable=True
+    )
+    home_team_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("teams.id", ondelete="SET NULL"), nullable=True
+    )
+    away_team_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("teams.id", ondelete="SET NULL"), nullable=True
+    )
+    venue: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), default=_utcnow
     )
@@ -94,6 +105,12 @@ class ProcessingJob(Base):
         String(36), ForeignKey("matches.id", ondelete="CASCADE"), index=True, nullable=False
     )
     organization_id: Mapped[str] = mapped_column(String(255), index=True, nullable=False)
+    # Set once a real PipelineRun exists for this job (see ontology.py) --
+    # nullable because the Phase 1 synthetic demo path predates real
+    # pipeline runs; the Phase 2 synthetic generator populates it.
+    pipeline_run_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("pipeline_runs.id", ondelete="SET NULL"), nullable=True
+    )
     task_name: Mapped[str] = mapped_column(String(100), nullable=False)
     dedup_key: Mapped[str] = mapped_column(String(255), nullable=False)
     celery_task_id: Mapped[str | None] = mapped_column(String(255), nullable=True)

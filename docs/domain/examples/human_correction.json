@@ -1,0 +1,15 @@
+{
+  "id": "e5d9bbd9-c0e4-4080-808e-41aa923b0ed8",
+  "target_type": "action",
+  "target_id": "785d0f0d-a1a8-4542-8b83-d5f20bb7210f",
+  "field_name": "action_type",
+  "previous_value": {
+    "action_type": "attack"
+  },
+  "corrected_value": {
+    "action_type": "tip"
+  },
+  "corrected_by_user_id": "coach-1",
+  "corrected_at": "2026-08-28 18:05:23.045092",
+  "reason": "Video review: soft touch, not a full swing"
+}

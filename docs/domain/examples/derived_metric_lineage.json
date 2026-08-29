@@ -1,0 +1,23 @@
+{
+  "metric_name": "attack_efficiency",
+  "metric_value": 0.43,
+  "contributing_action_ids": [
+    "785d0f0d-a1a8-4542-8b83-d5f20bb7210f",
+    "86432682-5c82-436c-8093-0357ca63ed53",
+    "3ea50932-9889-4ee0-8b00-4970f9a0fd66"
+  ],
+  "rallies": [
+    {
+      "rally_id": "fa03f048-f996-447e-87c9-efe3a5651ee9",
+      "clip_ref": "clips/fa03f048-f996-447e-87c9-efe3a5651ee9.mp4"
+    },
+    {
+      "rally_id": "25883b5a-d97e-4831-a6ec-b11ec656fcb3",
+      "clip_ref": "clips/25883b5a-d97e-4831-a6ec-b11ec656fcb3.mp4"
+    },
+    {
+      "rally_id": "e86e3649-e1e6-4123-a96e-b75b570b1657",
+      "clip_ref": "clips/e86e3649-e1e6-4123-a96e-b75b570b1657.mp4"
+    }
+  ]
+}

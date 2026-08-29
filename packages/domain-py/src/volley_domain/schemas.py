@@ -133,6 +133,18 @@ class SyntheticRally(BaseModel):
     player_positions: list[PlayerPositionSample]
     ball_positions: list[BallPositionSample]
     duration_seconds: float
+    # Cumulative offset within the synthetic match's own timeline (seconds
+    # from the start of set 1) -- NOT a real video PTS (there is no real
+    # video). Named match_t_* rather than video_t_* deliberately, so it's
+    # never confused with the absolute-video-time contract Rally.video_t_*
+    # carries in the real ontology (see ONTOLOGY.md / DATA_FLOW.md).
+    # persist_synthetic_match writes these into Rally.video_t_start/end as
+    # the best available stand-in until real video timing exists (Phase 5+).
+    # An earlier version reset each rally's actions to start at t=0, so
+    # every rally in a multi-set match claimed the same ~0-12s window --
+    # caught by independent architecture review.
+    match_t_start: float
+    match_t_end: float
 
 
 class SyntheticSetScore(BaseModel):
@@ -192,3 +204,81 @@ class SyntheticMatch(BaseModel):
             total_rallies=sum(len(s.rallies) for s in self.sets),
             generated_at=self.generated_at,
         )
+
+
+# ---------------------------------------------------------------------------
+# Ontology read API (Phase 2, see docs/domain/ONTOLOGY.md) -- response
+# shapes for the real persisted Event Log, distinct from the Synthetic*
+# schemas above (which describe the Phase 1 JSON-blob demo payload).
+# ---------------------------------------------------------------------------
+
+
+class MatchSetOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    match_id: str
+    index: int
+    home_points: int
+    away_points: int
+    winner_team_id: str | None
+    created_at: datetime
+
+
+class RallyOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    set_id: str
+    index_in_set: int
+    serving_team_id: str
+    point_winner_team_id: str | None
+    video_t_start: float | None
+    video_t_end: float | None
+    duration_seconds: float | None
+
+
+class OutcomeOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    result: ActionOutcome
+    detail: str | None
+
+
+class ActionOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    phase_id: str
+    rally_id: str
+    action_type: ActionType
+    actor_team_id: str
+    actor_roster_id: str | None
+    video_t_start: float
+    video_t_end: float
+    court_x: float
+    court_y: float
+    confidence: float
+    reviewed_status: Literal["unreviewed", "confirmed", "corrected"]
+    quality_rating: int | None
+    outcome: OutcomeOut | None = None
+
+
+class MatchStatisticsOut(BaseModel):
+    """API-facing wrapper for volley_domain.stats.engine.MatchStatistics --
+    kept as a permissive dict-of-dicts shape here rather than re-declaring
+    every stats dataclass as a Pydantic model; the engine's dataclasses are
+    the source of truth for the *shape*, this is just what crosses the
+    OpenAPI boundary. Revisit if a stronger contract is needed once the
+    frontend (Phase 3) is actually consuming this."""
+
+    formula_version: str
+    serve: dict
+    reception: dict
+    attack: dict
+    block: dict
+    dig: dict
+    sideout_breakpoint: dict
+    setter_distribution: dict
+    rally_duration: dict

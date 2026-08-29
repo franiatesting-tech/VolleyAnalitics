@@ -54,3 +54,7 @@ Thumbs.db
 # --- Logs ---
 *.log
 logs/
+
+# --- Claude Code runtime state (session-local, never shared) ---
+.claude/scheduled_tasks.lock
+.claude/*.lock

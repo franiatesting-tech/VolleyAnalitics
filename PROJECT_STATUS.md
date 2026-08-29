@@ -1,65 +1,65 @@
 # Project Status
 
-_Last updated: 2026-08-28_
+_Last updated: 2026-08-29_
 
 ## Phase
 
-**Phase 1 — Platform skeleton, implementation complete, live integration unverified.** Phase 0 (architecture/governance/licensing gate) is done. This session built the full Phase 1 vertical slice (backend + frontend + CI + Docker configs), then ran two independent reviews (architecture-lead, qa-release-engineer) against it, which found real bugs — including two that would have broken authentication on first run. All findings rated "must fix" or "should fix" have been fixed and re-verified. What remains unverified is explicitly listed below, not glossed over.
+**Phase 2 — Volleyball domain ontology, Event Log, statistics engine, lineage: done.** Phase 0 (architecture/governance) and Phase 1 (platform skeleton — API/worker/web, independently reviewed and all blocking findings fixed) are done. This session built the real volleyball ontology per `docs/domain/ONTOLOGY.md` / ADR-004: 21 new tables, a pure statistics engine, a coordinate system, a lineage helper, an append-only correction service, wired the Phase 1 synthetic generator to persist into it for real (not just the JSON blob) — and both independent reviews this phase required (volleyball-domain-analyst, architecture-lead) have run, and every blocking finding from both is fixed and re-verified. Four should-fix findings remain deliberately deferred with tracked `TECH_DEBT.md` entries (see "Open risks carried forward" below) — not silently dropped.
 
 ## What exists and is verified (real commands run, not just claimed)
 
-- **`packages/domain-py`**: SQLAlchemy models, Pydantic schemas, deterministic synthetic-match generator. 9/9 tests passing.
-- **`services/api`** (FastAPI): JWT/JWKS auth, org-scoped endpoints, structured logging/errors, dev-only auth bypass that now fails closed outside development/test environments. **20/20 tests passing** (up from 13 — added real cryptographic JWT-verification tests using a generated keypair + stub JWKS, plus the auth-bypass production guard).
-- **`services/worker`** (Celery): idempotent, retryable `process_demo_match` task, durable Postgres-backed progress. 4/4 tests passing. Task name is now a single shared constant in `packages/domain-py` (was two independently-hardcoded strings — a real bug, fixed).
-- **`packages/contracts`**: OpenAPI→TypeScript pipeline, verified end-to-end. `GET /matches/{id}/result` now has a real `response_model` (`SyntheticMatch`) — the frontend's hand-written duplicate types for this endpoint have been deleted and replaced with the generated ones.
-- **`apps/web`** (Next.js 16, Better Auth Organizations+JWT, TanStack Query): built and independently spot-checked in a real browser (auth-gating, error states, loading/empty states all confirmed working). Lint/typecheck/build/12 Vitest tests all pass.
-- Full Python + TypeScript codebase: Ruff clean, `ruff format --check` clean, pyright clean (0 errors), ESLint clean, `tsc --noEmit` clean across every package.
-- **Licensing gate backfilled** (see "Corrected this session" below) — every Phase 1 dependency is now in `docs/licensing/OSS_MANIFEST.md`, including one real LGPL dependency (`psycopg`) that had shipped with zero review.
-- **ADR-003** written: the JWT claim contract between `apps/web` and `services/api` (claim names, algorithm allowlist, token lifetime/revocation trade-off) — previously implemented but undocumented, which is exactly where the audience-mismatch bug below was hiding.
+- **`docs/domain/ONTOLOGY.md`** — full entity documentation, ER diagram (mermaid), design decisions (why there's no generic `Prediction` table, why `CourtPosition` is a value type not a table), correction semantics, statistics-engine formulas verified against SDHSAA/NCAA/coachingvb.com sources (not assumed).
+- **`packages/domain-py/src/volley_domain/ontology.py`** — Season/Competition/Team/Player/Roster, Lineup/LineupPlayer/Rotation, MatchSet/Rally/Phase/Action/Outcome, Video/VideoAsset/PipelineRun/ModelRun, BallObservation/PlayerObservation, HumanCorrection/ReviewedLabel. Split from Phase 1's `models.py` via a new shared `base.py` (see ADR-004). `Action.model_run_id` is `NOT NULL`/`CASCADE` (provenance always required, per architecture review); `MatchSet`/`Rally`/`Phase`/`Action` have `UniqueConstraint`s on their ordering columns; `Video.video_hash` uniqueness is org-scoped, not global.
+- **`volley_domain.court`** — normalized coordinate system, zone anchors, mirroring, nearest-zone attribution. 12 geometric tests. Mirroring is exercised only by rendering code, never applied when writing ground truth (see the away-team zone-attribution fix below).
+- **`volley_domain.stats`** — pure statistics engine (serves/aces/errors, configurable-scale reception rating, attack efficiency including tips, blocks, digs, sideout/breakpoint %, setter distribution, rally duration). 27 known-input/known-output tests, including the exact SDHSAA 20/5/30→0.50 worked example.
+- **`volley_domain.lineage`** — `explain_metric`, a real, tested pure function. **Not** wired to a real caller yet — see "Open risks" below.
+- **`volley_domain.corrections`** — append-only `HumanCorrection`/`ReviewedLabel` recording, verified against a real (SQLite) database that a correction never destroys the prediction it corrects. 4 tests.
+- **`volley_domain.synthetic.persistence`** — the synthetic generator now writes real ontology rows (not just JSON), verified end-to-end: 7 tests proving correct row counts, no cross-team phase contamination, in-bounds coordinates, deterministic output, and match-absolute (not rally-clustered) timestamps.
+- **`services/worker`** — `process_demo_match` now persists into the real ontology *and* still writes the JSON blob (deliberate coexistence, see ADR-004/TECH_DEBT.md), atomically, with a test proving Celery redelivery does not duplicate ontology rows.
+- **`services/api`** — 4 new org-scoped read endpoints (`/matches/{id}/sets`, `/rallies`, `/rallies/{id}/actions`, `/matches/{id}/statistics`), tests against real persisted data, including that every one 404s for a cross-tenant request.
+- **Migration `0002`** — creates all 21 new tables (+ new nullable columns on `matches`/`processing_jobs`) as **frozen, hand-owned `op.create_table()` DDL**, not read from live SQLAlchemy metadata at migration-run time (an earlier draft did that; rewritten after architecture review — see ADR-004). **Verified 2026-08-29 against a real Postgres 16** (`docker compose up postgres`, `alembic upgrade head`): both `0001` and `0002` apply cleanly, all 24 tables (2 Phase-1 + 21 Phase-2 + `alembic_version`) exist with the expected FKs/unique constraints (spot-checked `actions`: `uq_action_phase_index`, `model_run_id NOT NULL` + `ON DELETE CASCADE`, all as designed). Downgrade direction is still only offline-verified (`--sql`) — a live-Postgres downgrade run was blocked by the repo's own destructive-command guard, which requires explicit confirmation before running `alembic downgrade` against a real database; not attempted since the upgrade path was the actual open risk.
+- **`docs/domain/examples/`** — real JSON examples (Action, Rally, HumanCorrection), generated by actually running the pipeline. `derived_metric_lineage.json` is the one exception — see its corrected `README.md` entry: it illustrates `explain_metric`'s output shape from hand-constructed inputs, since no real caller assembles those inputs yet.
+- **Total: 98/98 Python tests passing** (65 `domain-py` + 27 `api` + 6 `worker`, run per-package — a pre-existing `conftest.py` module-name collision between `services/api/tests` and `services/worker/tests` means they cannot currently be collected in one combined `pytest` invocation; not a new issue, not yet fixed, not blocking since CI/local workflows run them separately). Ruff and `ruff format --check` clean across the whole Python codebase. **pyright was not run this session — not installed in this sandbox and no network install was attempted; this is a real gap, not a "clean" claim being made falsely.**
 
-## Corrected this session (found by independent review, not self-review)
+## Independent review status: both required reviews complete, all blocking findings fixed
 
-An architecture-lead review and a qa-release-engineer review ran independently and in parallel against the completed Phase 1 slice. Real findings, now fixed:
+**volleyball-domain-analyst review** (rule/statistic correctness) found 5 real issues:
+1. A real FIVB Rule 9.3 violation in the synthetic generator (4 consecutive same-team touches) — **fixed**, regression test added across 30 seeds.
+2. `tip` actions silently excluded from attack statistics — **fixed** (`_ATTACK_LIKE_ACTION_TYPES`).
+3. `AttackStats.direction_counts` mislabeled (measures takeoff position, not landing direction) — **fixed**, renamed to `takeoff_position_counts`.
+4. The `blocked`-attack heuristic is real but never exercised by the generator — **documented** in `TECH_DEBT.md`, not fixed (needs either generator changes or `Outcome.detail`-based labeling).
+5. Libero modeling (two booleans) is adequate today but insufficient for future rotation-legality validation — **documented** in `TECH_DEBT.md`, correctly not "fixed" with a guessed rule.
 
-1. **JWT audience/issuer mismatch — would have 401'd every authenticated request.** `docker-compose.yml`'s `web` service and the CI e2e-smoke job's web-build step set no `AUTH_ISSUER`/`AUTH_AUDIENCE`, so Better Auth fell back to its own default audience while `services/api` required `aud: "volley-api"`. Found by reading Better Auth's installed source directly, not guessed. Fixed in both places; documented in ADR-003.
-2. **Better Auth's schema was never migrated anywhere** — no step in `docker-compose.yml` or CI ran `pnpm auth:migrate`. Fixed: added a `web-migrate` one-off Compose service (`web` now depends on it completing) and a CI step before the web build.
-3. **`GET /matches/{id}/result` had no `response_model`**, contradicting this project's own "no hand-duplicated contracts" rule in four places — fixed with `response_model=SyntheticMatch`; the frontend's compensating hand-written interfaces are deleted.
-4. **The OSS license gate was not run for a single Phase 1 dependency** — `psycopg` (LGPL-3.0-only) shipped with zero review, same tier as FFmpeg which the project otherwise treats carefully. Backfilled: `OSS_MANIFEST.md` now covers every actual dependency, `LICENSE_DECISIONS.md` D-009 closes psycopg, D-010 records the process failure itself.
-5. **`DEV_AUTH_BYPASS` had no fail-closed guard** — fixed with a Pydantic startup validator that crashes if it's ever `true` outside `development`/`test`.
-6. **Task name duplicated as two independent string literals** (api and worker each hardcoded `"process_demo_match"`) despite `packages/domain-py` existing specifically to prevent this — fixed, both now import one constant.
-7. **A failed job-enqueue attempt could permanently wedge a match** (the idempotency check couldn't distinguish "queued and dispatched" from "queued but the enqueue call itself failed") — fixed.
-8. Two `ProcessingJob` queries filtered by `dedup_key` alone, not also `organization_id`, contradicting the file's own stated invariant (safe in practice since `dedup_key` derives from an already-org-verified `match_id`, but the invariant the code held didn't match the one the docstring claimed) — fixed defensively.
-9. Worker's blanket `except Exception: retry` made the declared `autoretry_for=(ConnectionError, TimeoutError)` dead configuration — removed the misleading dead config, documented the actual (deliberate) retry-everything policy.
-10. `THIRD_PARTY_NOTICES.md` was still a Phase-0 stub claiming zero dependencies existed — backfilled with a real snapshot from `uv.lock`/`pnpm list` (noted as manual/not-yet-automated — see `TECH_DEBT.md`).
+**architecture-lead review** (schema/traceability/migration soundness) initially returned **"No — not yet sound"**, with 4 blocking bugs and 4 should-fix gaps:
+1. Away-team zone attribution silently wrong (mirrored coordinates written as if unmirrored) — **fixed and reproduced before/after**. The most severe of the four.
+2. Rally/Action timestamps were rally-relative, not match-absolute (every rally claimed the same ~0–12s window) — **fixed and reproduced before/after**.
+3. Migration 0002 read live ORM metadata at migration-run time instead of freezing DDL — **fixed**: rewritten as frozen `op.create_table()` calls, generated once from metadata and reviewed by hand, no runtime `volley_domain` dependency.
+4. `Action.model_run_id` was nullable/`SET NULL`, contrary to CLAUDE.md's provenance requirement and inconsistent with `BallObservation`/`PlayerObservation` — **fixed**: now `NOT NULL`/`CASCADE`.
+5. (S1) No uniqueness on ordering columns — **fixed** (4 new `UniqueConstraint`s). Get-or-create for `persist_synthetic_match`'s `Season`/`Team`/`Player`/`Roster` creation — **not fixed**, tracked in `TECH_DEBT.md`.
+6. (S2) `lineage.explain_metric` not callable end-to-end by any real caller — **not fixed**, tracked in `TECH_DEBT.md`.
+7. (S3) `Video.video_hash` was globally unique instead of org-scoped — **fixed**.
+8. (S4) Two "Phase 3" references that should have said "Phase 5" — **fixed**, in `ADR-004`, `ONTOLOGY.md`, `TECH_DEBT.md`.
 
-Also corrected: `OSS_MANIFEST.md` listed "Base UI" for the component library; what's actually installed is Radix UI primitives — fixed. A misleading docstring on unused `SyntheticMatchSummary` claimed it was what `/result` returns (it isn't, by design) — corrected.
+Full detail for both reviews: `ADR-004`'s "Independent review findings" and "Independent architecture review findings" sections.
 
-## Explicitly unverified — do not treat as done
+## Two real design gaps caught and fixed *during* this implementation (kept visible on purpose)
 
-**Nobody has run the full stack together.** Docker Desktop was unreachable in this session's sandbox (confirmed by both the implementing work and, independently, by the qa-release-engineer review hitting the identical `docker info` hang) — likely needs first-run GUI interaction unavailable here. Consequence:
+1. `PipelineRun.video_id` was originally `NOT NULL`, but synthetic pipeline runs have no source video. Rather than fabricate a placeholder `Video` row (which would misrepresent one as existing), made it nullable with a documented single exception (synthetic runs only) — see ADR-004 and the corresponding `TECH_DEBT.md` entry (no DB-level constraint yet enforces the exception; application-code discipline only, until a real pipeline run exists in Phase 5).
+2. A first draft of the `/rallies/{id}/actions` endpoint bolted an `outcome` attribute onto `Action` instances dynamically at runtime (`action.outcome = ...`) to avoid a second query — this would have worked but bypassed proper typing/eager-loading. Replaced with a real one-to-one SQLAlchemy `relationship()` between `Action`/`Outcome` plus `selectinload` in the route.
 
-- `docker compose up` has never actually been run.
-- The real Alembic migration has never been applied to a live Postgres (only verified via `alembic upgrade head --sql`'s offline dialect-correct-DDL check).
-- The Playwright `@smoke` E2E test (real sign-up → org → match → demo-process → result, through the real Better Auth JWT/JWKS path) has never executed.
-- CI (`.github/workflows/ci.yml`) **has never run at all** — there is no remote git host configured yet (see below), so GitHub Actions has never fired once. Treat every CI job as "written and locally spot-checked piece-by-piece," not "green."
+## Open risks carried forward
 
-**The first thing to do in an environment with working Docker is `docker compose up` and watch the smoke test pass end to end.** Everything single-process (Python unit tests, web unit tests, contract generation, offline migration DDL) is genuinely verified; everything crossing a process boundary is not, and that is exactly where 2 of the 10 corrected findings above were hiding — treat that as a reason for continued caution, not a coincidence now closed out.
-
-## Open risks carried from Phase 0 (see ADR-001 §Risks)
-
-- RF-DETR XL/2XL weights (PML-1.0, non-open) — stay on Base/Large until reviewed.
-- FFmpeg build discipline (D-006, open) — must close before video ingest lands (Phase 2).
-- No remote git host configured yet — local-only repository, nothing has ever been pushed.
-
-## New tech debt this session (see TECH_DEBT.md for full entries)
-
-Synthetic match data as a JSON blob (planned, paydown = Phase 2 Event Log); hand-written initial Alembic migration (paydown = run `alembic check` against real Postgres); JWT's 15-minute revocation gap (paydown = before Phase 6, real client data); `THIRD_PARTY_NOTICES.md` generation is manual (paydown = before first release).
+- **Live-Postgres migration verification: done 2026-08-29** (previously the top open risk — Docker Desktop was broken on this machine for several sessions; root cause was a disabled Windows `WSLService` plus a stuck AF_UNIX socket driver requiring a Winsock reset + reboot, now resolved). Only the downgrade direction remains offline-only-verified — see above.
+- **pyright still not run** — not installed in this sandbox, and no network install was attempted this session either. Ruff and the full test suite were run and are clean; static type-checking coverage for this session's changes is an open gap, not a verified-clean claim.
+- **No real match video has been run through any pipeline yet** — everything verified so far uses the synthetic generator (`generate_synthetic_match`), which exercises the *ontology/statistics/API* layers but not detection/tracking/pose/court-calibration, none of which exist yet (Phases 4–6). A real video isn't usable for an end-to-end test until those phases ship.
+- Deferred, tracked in `TECH_DEBT.md`: `persist_synthetic_match`'s missing get-or-create (duplicate `Team`/`Season`/`Player` rows across repeated demo runs), `lineage.explain_metric` not wired to a real caller, the never-exercised `blocked`-attack heuristic, libero modeling insufficient for future rotation-legality checks.
+- The JSON-blob/ontology dual-write in the worker task is real, temporary complexity (see `TECH_DEBT.md`) with a clear removal condition: Phase 3's frontend migrating off `GET /matches/{id}/result`.
+- Carried from Phase 0/1: RF-DETR XL/2XL licensing (D-002), FFmpeg build discipline (D-006, open), JWT 15-minute revocation gap (accepted for synthetic-data-only stakes, revisit before Phase 7), no remote git host configured yet.
 
 ## Immediate next steps
 
-1. Get Docker working (or hand this to the user) and actually run `docker compose up` + the Playwright E2E smoke test — this is the single biggest remaining unknown.
-2. Push to a remote and let CI actually run once, for real.
-3. Only then: Phase 2 (real volleyball ontology / Event Log, per `ROADMAP.md`).
+1. Push to a remote and let CI actually run once, for real.
+2. Phase 3 (sports-analytics design system, built against the real ontology endpoints) — next up, per explicit user direction to follow the roadmap order rather than jump ahead to Technique Lab (Prompt 8).
 
 ## How to keep this file honest
 
