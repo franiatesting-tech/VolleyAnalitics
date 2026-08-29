@@ -7,7 +7,7 @@ from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import Session
 from volley_domain.base import Base
 from volley_domain.models import Match, MatchStatus
-from volley_domain.ontology import Action, ModelRun, Outcome, Phase, Rally
+from volley_domain.ontology import Action, ModelRun, Outcome, Phase, Rally, Team
 from volley_domain.ontology import MatchSet as MatchSetRow
 from volley_domain.synthetic.generator import generate_synthetic_match
 from volley_domain.synthetic.persistence import persist_synthetic_match
@@ -180,3 +180,27 @@ def test_persist_synthetic_match_is_deterministic_in_row_counts_for_same_seed(db
         .where(MatchSetRow.match_id == match_b.id)
     )
     assert count_a == count_b
+
+
+def test_persist_synthetic_match_links_match_to_its_home_and_away_teams(db):
+    """Match.home_team_id/away_team_id must actually get populated -- an
+    earlier version only ever wrote match.status to the Match row, so these
+    columns (which MatchOut relies on to answer "home" or "away" without
+    inferring it from the synthetic JSON blob) shipped permanently null
+    despite existing on the model. No test caught this until independent
+    architecture review traced it by hand. See TECH_DEBT.md / ADR-004."""
+    match = _make_match(db)
+    synthetic = generate_synthetic_match(seed=3, home_team="Alpha VC", away_team="Beta VC")
+
+    persist_synthetic_match(db, organization_id="org-1", match_id=match.id, synthetic=synthetic)
+    db.commit()
+
+    db.refresh(match)
+    assert match.home_team_id is not None
+    assert match.away_team_id is not None
+    assert match.home_team_id != match.away_team_id
+
+    home_team = db.get(Team, match.home_team_id)
+    away_team = db.get(Team, match.away_team_id)
+    assert home_team.name == "Alpha VC"
+    assert away_team.name == "Beta VC"

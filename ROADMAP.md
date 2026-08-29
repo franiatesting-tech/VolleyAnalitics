@@ -27,7 +27,7 @@ Repository architecture, ADR-001, licensing gate, Claude Code agents/skills/hook
 - Pure, testable statistics engine (`volley_domain.stats`) — serves/aces/errors, reception (configurable rating scale), attack efficiency, blocks, digs, sideout/breakpoint %, setter distribution, rally duration — verified against published conventions (SDHSAA/NCAA), not assumed.
 - Lineage helper (`volley_domain.lineage`) answering "why does it show me this number" — metric → events → rallies → clips.
 - Append-only correction service (`volley_domain.corrections`) — verified against a real database that a correction never destroys the prediction it corrects.
-- The Phase 1 synthetic generator now persists into this real ontology (`persist_synthetic_match`), not just the JSON blob — see ADR-004 for why the JSON blob still coexists for now (Phase 3's UI hasn't migrated off it yet).
+- The Phase 1 synthetic generator now persists into this real ontology (`persist_synthetic_match`), not just the JSON blob — see ADR-004 for why the JSON blob still coexists (Phase 3's UI migrated discrete stats/events off it; only rally replay's position time series still reads it, and will until Phase 5+).
 - Initial read endpoints: `GET /matches/{id}/sets`, `/rallies`, `/rallies/{id}/actions`, `/statistics` — org-scoped, tested against real persisted data.
 
 **Exit criterion:** the ontology, statistics engine, and lineage are real, tested (92 Python tests passing across the whole backend as of this phase), and independently reviewed by volleyball-domain-analyst (rule/stat correctness) and architecture-lead (schema/traceability consistency) — see PROJECT_STATUS.md for review outcome.
@@ -36,9 +36,9 @@ Repository architecture, ADR-001, licensing gate, Claude Code agents/skills/hook
 
 - Premium "sports intelligence workstation" design system (typography/spacing/color/motion) on top of shadcn.
 - 2D top-down tactical court, rally replay, video shell, Match Analysis / Rally Explorer pages — built against Phase 2's real ontology endpoints (and, where richer data helps before Phase 5's CV lands, the still-available synthetic JSON blob).
-- This is the point where the JSON-blob dual-write from Phase 2 gets removed — see `TECH_DEBT.md`.
+- **Revised 2026-08-29**: discrete stats/events (sets, rallies, actions, statistics) now come entirely from the real ontology endpoints, satisfying the exit criterion below. The JSON-blob dual-write itself is *not* fully removed this phase, though — rally replay's continuous position time series has no ontology-table home until Phase 5 produces real per-frame observations (`BallObservation`/`PlayerObservation` are schema-designed for genuine CV output and would misrepresent synthetic data if reused for this). See `TECH_DEBT.md`'s "Synthetic match data written to both the ontology and a JSON blob" entry for the full reasoning and the real removal condition.
 
-**Exit criterion:** a coach can browse a fully synthetic match through a coherent, polished UI — court visualization, rally replay, stats — with every number traceable to source rally, entirely on synthetic data (no CV yet).
+**Exit criterion:** a coach can browse a fully synthetic match through a coherent, polished UI — court visualization, rally replay, stats — with every number traceable to source rally, entirely on synthetic data (no CV yet). **Met, 2026-08-29** — independently reviewed by architecture-lead and qa-release-engineer (each in two passes: initial review, then re-confirmation after fixes), both signed off. See PROJECT_STATUS.md's "Phase 3 independent review" for full detail.
 
 ## Phase 4 — Dataset factory, annotation, golden set
 

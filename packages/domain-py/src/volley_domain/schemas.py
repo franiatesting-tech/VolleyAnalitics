@@ -44,6 +44,13 @@ class MatchOut(BaseModel):
     organization_id: str
     home_team: str
     away_team: str
+    # Nullable: real Team rows only exist once a real roster/synthetic
+    # demo has been persisted against this match (see
+    # synthetic/persistence.py) -- a freshly created Match legitimately
+    # has neither yet. The frontend must not assume these are always
+    # present; see docs/domain/ONTOLOGY.md's "Match structure" section.
+    home_team_id: str | None
+    away_team_id: str | None
     scheduled_at: datetime | None
     status: MatchStatus
     created_at: datetime

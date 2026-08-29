@@ -23,7 +23,7 @@ Every third-party dependency (library, model, dataset) considered for the produc
 | clsx | MIT | Safe | |
 | tailwind-merge | MIT | Safe | |
 | tw-animate-css | MIT | Safe | |
-| D3 | ISC | Safe | installed in Phase 1 (pulled in ahead of Phase 3's dataviz work); not yet used by any component |
+| D3 | ISC | Safe | installed in Phase 1 (pulled in ahead of Phase 3's dataviz work); in use since Phase 3 for `TacticalCourt`'s scales (`apps/web/src/components/court/tactical-court.tsx`) |
 | Three.js | MIT | Safe | not yet installed — pre-cleared, only when 3D encodes real information per ADR-001 |
 | React Three Fiber | MIT | Safe | not yet installed — pre-cleared alongside Three.js |
 | Motion (`motion` package, Framer Motion successor) | MIT | Safe | installed; used for `prefers-reduced-motion`-aware transitions |

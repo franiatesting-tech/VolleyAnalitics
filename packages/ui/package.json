@@ -1,0 +1,7 @@
+{
+  "name": "@volley/ui",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Reserved for shared UI components across apps -- empty placeholder, nothing lives here yet. apps/web currently owns all its own components under src/components.",
+  "type": "module"
+}

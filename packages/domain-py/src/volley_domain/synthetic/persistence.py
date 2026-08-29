@@ -15,6 +15,7 @@ from datetime import date
 
 from sqlalchemy.orm import Session
 
+from volley_domain.models import Match
 from volley_domain.ontology import (
     Action,
     ModelRun,
@@ -94,6 +95,26 @@ def persist_synthetic_match(
     away_team = Team(organization_id=organization_id, name=synthetic.away_roster.team_name)
     db.add_all([home_team, away_team])
     db.flush()
+
+    # Link the Match row to the Team rows we just created -- MatchOut
+    # exposes these so the frontend can resolve "home"/"away" without
+    # inferring it from the synthetic JSON blob. An earlier version never
+    # did this (only match.status was ever written to Match), so
+    # MatchOut.home_team_id/away_team_id would have shipped permanently
+    # null despite existing on the model -- caught by independent
+    # architecture review before the API field was even added.
+    #
+    # A missing Match here is a caller-contract violation, not a normal
+    # case to swallow -- this function's own docstring requires the Match
+    # to already exist (MatchSet.match_id is NOT NULL). An earlier version
+    # silently no-op'd instead of raising, which is exactly the class of
+    # "write that never happens with nothing complaining" this fix exists
+    # to close -- caught by independent re-review.
+    match = db.get(Match, match_id)
+    if match is None:
+        raise ValueError(f"persist_synthetic_match: no Match row exists for match_id={match_id!r}")
+    match.home_team_id = home_team.id
+    match.away_team_id = away_team.id
 
     team_row_by_side = {"home": home_team, "away": away_team}
     roster_row_by_player_id: dict[str, Roster] = {}

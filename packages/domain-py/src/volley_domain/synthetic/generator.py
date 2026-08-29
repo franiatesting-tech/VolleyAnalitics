@@ -134,8 +134,37 @@ def _build_action_chain(
     server = _pick(rng, [p for p in server_roster.players if p.position != "L"])
     serve_xy = ZONE_ANCHORS[1]
 
-    # Rally length: mostly short (ace / serve error / quick kill), sometimes long.
-    rally_shape = rng.choices(["ace", "serve_error", "short", "long"], weights=[10, 6, 54, 30])[0]
+    # Rally length: mostly short (ace / serve error / quick kill), sometimes
+    # long. "ace" and "serve_error" are each only offered when consistent
+    # with `point_winner` -- an ace always gives the point to the server, a
+    # serve error always gives it to the receiver, so choosing either one
+    # when `point_winner` says otherwise would make this rally's own
+    # Action/Outcome chain contradict Rally.point_winner_team_id (an earlier
+    # version picked the shape independently of point_winner, so ~2/3 of
+    # ace/serve_error rallies had their point awarded to the "wrong" team
+    # relative to what actually happened in the action log -- caught by
+    # independent review of the persisted data, not by any test, since no
+    # test checked this cross-consistency before).
+    #
+    # Weights within each branch are copied from the original combined
+    # weights, but that does NOT keep the overall ace/serve-error rate
+    # close to the original design intent -- an earlier version of this
+    # comment claimed it did; that was checked and was false. Because
+    # `point_to_server` (the outer loop's probability that the server's
+    # side wins the rally) is deliberately low (~0.21, modeling sideout
+    # volleyball), confining "ace" to only the `point_winner ==
+    # serving_team` branch measurably drops the overall ace rate (~10%
+    # before this fix, ~2.3% after, over 20 seeds / 3292 rallies) well
+    # below typical real-match ace rates (~5-8%). Correctness (this rally's
+    # own action log agreeing with its point_winner) was judged more
+    # important than rate realism for this fix; if the lower ace rate turns
+    # out to matter for a downstream consumer (e.g. a stats-realism
+    # benchmark), rebalance these weights deliberately with research behind
+    # the target rate, don't just restore the old numbers.
+    if point_winner == serving_team:
+        rally_shape = rng.choices(["ace", "short", "long"], weights=[10, 54, 30])[0]
+    else:
+        rally_shape = rng.choices(["serve_error", "short", "long"], weights=[6, 54, 30])[0]
 
     if rally_shape == "ace":
         add("serve", serving_team, server, 0.9, "point", serve_xy)

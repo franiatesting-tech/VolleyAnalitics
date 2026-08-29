@@ -137,3 +137,36 @@ def test_no_team_ever_makes_more_than_three_consecutive_contacts():
                         )
                     else:
                         consecutive = 1
+
+
+def test_rally_point_winner_agrees_with_its_own_final_action_outcome():
+    """Rally.point_winner must be consistent with what the rally's own
+    Action/Outcome chain actually shows happened -- an ace's serve outcome
+    is "point" for the *serving* team and a serve error's is "error" for
+    the serving team (i.e. "point" for the receiver), so point_winner must
+    agree. An earlier version chose the ace/serve-error rally shape with a
+    random draw fully independent of the already-decided point_winner, so
+    Rally.point_winner_team_id could (and ~2/3 of the time did, on real
+    persisted data) contradict its own rally's action log -- e.g. an ace
+    persisted alongside a point awarded to the receiving team. Caught by
+    independent review of live-persisted data during Phase 3, not by any
+    test until this one."""
+    for seed in range(30):
+        match = generate_synthetic_match(seed=seed)
+        for s in match.sets:
+            for rally in s.rallies:
+                last = rally.actions[-1]
+                if last.type != "serve":
+                    continue  # only serve-only (ace/serve_error) rallies assert a shape here
+                if last.outcome == "point":
+                    assert rally.point_winner == last.actor_team, (
+                        f"seed={seed} rally={rally.id}: ace serve outcome says "
+                        f"{last.actor_team!r} scored, but point_winner={rally.point_winner!r}"
+                    )
+                elif last.outcome == "error":
+                    expected_winner = "away" if last.actor_team == "home" else "home"
+                    assert rally.point_winner == expected_winner, (
+                        f"seed={seed} rally={rally.id}: serve error by "
+                        f"{last.actor_team!r} means the other team scored, but "
+                        f"point_winner={rally.point_winner!r}"
+                    )

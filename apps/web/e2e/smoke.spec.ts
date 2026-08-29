@@ -50,14 +50,24 @@ test.describe("golden path @smoke", () => {
       timeout: 60_000,
     });
 
-    // 6. The result view shows something derived from the completed match:
-    // roster player counts and at least one scored set.
-    const result = page.getByTestId("match-result");
-    await expect(result).toBeVisible();
-    await expect(result).toContainText("players");
-    await expect(page.getByTestId("set-list")).toBeVisible();
-    const setRows = page.getByTestId("set-list").locator("li");
-    await expect(setRows.first()).toBeVisible();
-    await expect(setRows.first()).toContainText("rallies");
+    // 6. Match Analysis renders against the real ontology endpoints: the
+    // Overview tab shows at least one scored set.
+    await expect(page.getByTestId("match-analysis-tabs")).toBeVisible();
+    const setRows = page.getByTestId("set-score-list").locator("li");
+    await expect(setRows.first()).toBeVisible({ timeout: 15_000 });
+
+    // 7. The headline capability of this phase: a stat tile click resolves
+    // to its real source events (Statistic -> Events -> Rallies), per the
+    // sports-dataviz click-through mandate -- not just that the tab renders.
+    await page.getByRole("tab", { name: "Statistics" }).click();
+    await page.getByTestId("stat-serve-total").first().click();
+    await expect(page.getByTestId("stat-events-panel")).toBeVisible();
+    // StatEventsPanel fans out one request per rally (~200+ on a full 5-set
+    // match) to locate matching events -- slower than the default 5s
+    // assertion timeout under CI load, unlike every other step here which
+    // already has an explicit one. Caught by independent re-review.
+    await expect(page.getByTestId("stat-events-list").locator("li").first()).toBeVisible({
+      timeout: 30_000,
+    });
   });
 });
