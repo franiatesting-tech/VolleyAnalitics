@@ -3,6 +3,7 @@
 only the Alembic-migrated tables in volley_domain.models.
 """
 
+import asyncio
 from collections.abc import AsyncGenerator
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -29,8 +30,9 @@ async def check_db_connection() -> bool:
     from sqlalchemy import text
 
     try:
-        async with _engine.connect() as conn:
-            await conn.execute(text("SELECT 1"))
+        async with asyncio.timeout(get_settings().db_healthcheck_timeout_seconds):
+            async with _engine.connect() as conn:
+                await conn.execute(text("SELECT 1"))
         return True
     except Exception:
         return False

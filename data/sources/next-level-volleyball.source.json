@@ -1,0 +1,18 @@
+{
+  "source_id": "youtube-next-level-volleyball",
+  "display_name": "Next Level Volleyball",
+  "provider": "youtube",
+  "source_url": "https://www.youtube.com/channel/UCBQUG4mkL-239WOmPwbxxXw",
+  "channel_id": "UCBQUG4mkL-239WOmPwbxxXw",
+  "rights_status": "approved",
+  "observed_platform_license": null,
+  "training_allowed_by_rights_holder": true,
+  "platform_acquisition_authorized": true,
+  "authorized_delivery_method": "Owner-directed direct download of the public source file for private project testing and model training",
+  "evidence_urls": [
+    "https://www.youtube.com/channel/UCBQUG4mkL-239WOmPwbxxXw",
+    "codex-thread://owner-attestation/2026-08-30"
+  ],
+  "checked_at": "2026-08-30T13:24:00Z",
+  "notes": "The project user explicitly attested on 2026-08-30 that this is their own channel and authorized direct download, private testing and model training. The first asset was acquired at 360p for ingest and geometry validation; media remains excluded from Git."
+}

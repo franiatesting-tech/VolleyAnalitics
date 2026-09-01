@@ -110,6 +110,7 @@ def _build_action_chain(
         duration: float,
         outcome: ActionOutcome,
         court_xy: tuple[float, float],
+        detail: str | None = None,
     ) -> None:
         nonlocal t
         x, y = court_xy
@@ -122,6 +123,7 @@ def _build_action_chain(
                 actor_player_id=actor.id,
                 actor_team=team,
                 outcome=outcome,
+                detail=detail,
                 confidence=round(rng.uniform(0.82, 0.99), 3),
                 court_x=round(x, 4),
                 court_y=round(y, 4),
@@ -202,6 +204,29 @@ def _build_action_chain(
         if is_last_exchange:
             attack_outcome = "point" if point_winner == current_team else "error"
             if attack_outcome == "error":
+                # A meaningful share of attack errors are a stuff block by
+                # the opposing team, not an unforced error -- standard
+                # scorekeeping convention (DataVolley/NCAA/SDHSAA) credits
+                # both sides: an "attack error" for the hitter and a
+                # "block kill" for the blocker. Without this branch,
+                # `AttackStats.blocked` and `BlockStats.block_kills` were
+                # structurally always 0 on synthetic data since nothing
+                # ever produced either signal -- flagged by independent
+                # domain review, fixed 2026-08-30 (TECH_DEBT.md).
+                stuffed = rng.random() < 0.3
+                if stuffed:
+                    add(
+                        "attack",
+                        current_team,
+                        attacker,
+                        0.5,
+                        "error",
+                        attack_zone,
+                        detail="blocked",
+                    )
+                    blocker = _pick(rng, rosters[other_team].players)
+                    add("block", other_team, blocker, 0.3, "point", ZONE_ANCHORS[6])
+                    return actions
                 add("attack", current_team, attacker, 0.5, "error", attack_zone)
                 return actions
             # Point could be a clean kill, or a dig/block sequence first.

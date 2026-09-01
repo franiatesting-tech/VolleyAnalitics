@@ -23,6 +23,23 @@ if config.config_file_name is not None:
 
 target_metadata = Base.metadata
 
+_MANAGED_TABLE_NAMES = frozenset(target_metadata.tables.keys())
+
+
+def include_object(object, name, type_, reflected, compare_to) -> bool:
+    """Excludes Better Auth's own tables (user/session/account/organization/
+    member/invitation/verification/jwks) from autogenerate/`alembic check`
+    comparisons. Without this, every check against a database where Better
+    Auth's own migrations have already run reports every one of its tables
+    as spurious drift (`reflected=True` and `compare_to=None` since they
+    were never registered on `target_metadata`) -- noise that would mask a
+    genuine drift signal in real volley_domain tables the day one actually
+    appears. Never filters anything this project's own Base.metadata does
+    know about, so a real gap in an owned table still surfaces normally."""
+    return not (
+        type_ == "table" and reflected and compare_to is None and name not in _MANAGED_TABLE_NAMES
+    )
+
 
 def _sync_url() -> str:
     url = get_settings().database_url
@@ -43,6 +60,7 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
+        include_object=include_object,
     )
     with context.begin_transaction():
         context.run_migrations()
@@ -55,7 +73,9 @@ def run_migrations_online() -> None:
         poolclass=pool.NullPool,
     )
     with connectable.connect() as connection:
-        context.configure(connection=connection, target_metadata=target_metadata)
+        context.configure(
+            connection=connection, target_metadata=target_metadata, include_object=include_object
+        )
         with context.begin_transaction():
             context.run_migrations()
 

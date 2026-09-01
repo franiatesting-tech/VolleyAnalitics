@@ -24,6 +24,8 @@ from volley_api.core.config import Settings, get_settings
 
 logger = structlog.get_logger(__name__)
 
+_VALID_ORG_ROLES = frozenset({"owner", "admin", "member"})
+
 
 @dataclass(frozen=True)
 class Principal:
@@ -64,10 +66,17 @@ def _principal_from_payload(payload: dict) -> Principal:
             status_code=status.HTTP_403_FORBIDDEN,
             detail="No active organization on this session",
         )
+    role = payload.get("org_role", "member")
+    if role not in _VALID_ORG_ROLES:
+        logger.warning("invalid_org_role_claim", role=role)
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Invalid organization role on this session",
+        )
     return Principal(
         user_id=payload["sub"],
         organization_id=organization_id,
-        role=payload.get("org_role", "member"),
+        role=role,
     )
 
 
@@ -96,3 +105,28 @@ async def get_current_principal(request: Request) -> Principal:
 
 
 CurrentPrincipal = Depends(get_current_principal)
+
+
+def require_org_roles(*allowed_roles: str):
+    """Build a FastAPI dependency that enforces organization-level RBAC.
+
+    Read routes remain available to every organization member; mutations
+    explicitly opt into owner/admin access at the route boundary.
+    """
+
+    allowed = frozenset(allowed_roles)
+    unknown = allowed - _VALID_ORG_ROLES
+    if not allowed or unknown:
+        raise ValueError(f"Invalid role requirement: {sorted(unknown or allowed)}")
+
+    async def _require_role(
+        principal: Principal = Depends(get_current_principal),
+    ) -> Principal:
+        if principal.role not in allowed:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Your organization role cannot perform this action",
+            )
+        return principal
+
+    return _require_role

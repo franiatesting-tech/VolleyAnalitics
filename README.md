@@ -2,7 +2,7 @@
 
 Commercial post-match video analytics for indoor 6x6 volleyball: automated statistics, computer-vision tracking, tactical analytics, video-synced visualization, and video-based biomechanics (Technique Lab).
 
-This repository is in **Phase 1 (platform skeleton)** — a real, tested backend runs on synthetic match data while the frontend and real CV pipeline are built out. See:
+This repository is in **Phase 4 (dataset factory, annotation, golden set)** — a real, tested backend and frontend run on synthetic match data, with the dataset-factory infrastructure verified end to end. Next Level Volleyball is the first owner-authorized source. A leakage-safe, DVC-versioned pool of nine real 720p50 clips from six matches (eight teams, two venues, 540.8 seconds) now passes acquisition and visual QA and has a frozen CVAT work package. The media is ready for annotation and unlabelled pretraining; human-reviewed labels are still required before it becomes the Phase 5 supervised benchmark. See:
 
 - [`PROJECT_STATUS.md`](PROJECT_STATUS.md) — what's true right now
 - [`ROADMAP.md`](ROADMAP.md) — phased implementation plan

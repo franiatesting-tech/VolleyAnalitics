@@ -254,20 +254,19 @@ def compute_attack_stats(actions: list[ActionRecord]) -> dict[str, AttackStats]:
     kill/error from these stats entirely, caught by independent domain
     review rather than any test.
 
-    Blocked: an attack whose error was specifically caused by an opposing
-    block -- since Action doesn't carry a separate "blocked" outcome (see
-    OutcomeResult), this counts attacks immediately followed (by sequence)
-    by an opposing "block" action. Known weakness (also flagged by
-    independent domain review, not yet fixed): this adjacency heuristic
-    doesn't check the block's own outcome, and -- more importantly -- the
-    Phase 1/2 synthetic generator never actually produces an attack-error-
-    immediately-followed-by-opposing-block sequence (an attack error ends
-    the rally immediately in that generator), so `blocked` is currently
-    always 0 on synthetic/demo data and this code path has never been
-    exercised end-to-end despite the unit-level formula test passing. A
-    more correct design would read a `detail="blocked"` value set directly
-    on the Outcome row by whatever labels it (human or model), rather than
-    inferring from adjacency -- tracked in TECH_DEBT.md, not fixed here.
+    Blocked: an attack error specifically caused by an opposing block
+    stuff. Primary signal is `ActionRecord.outcome_detail == "blocked"`
+    (mirrors `Outcome.detail`, set directly by whatever labels the action
+    -- the synthetic generator now produces real blocked-attack sequences
+    this way, see generator.py's last-exchange block-kill branch). Falls
+    back to the original adjacency heuristic (an error immediately
+    followed by an opposing "block" action) only when `outcome_detail` is
+    unset, so older/unlabeled data (or a future annotator/model that
+    hasn't started setting `detail` yet) still gets a best-effort count
+    instead of silently reading 0. Fixed 2026-08-30 (TECH_DEBT.md) -- the
+    heuristic-only version was flagged by independent domain review as
+    real but never exercised, since the generator never produced the
+    adjacency pattern it depended on.
 
     Efficiency: (kills - errors) / total_attempts, verified against
     SDHSAA/NCAA convention -- see docs/domain/ONTOLOGY.md."""
@@ -294,12 +293,15 @@ def compute_attack_stats(actions: list[ActionRecord]) -> dict[str, AttackStats]:
                 kills += 1
             elif atk.outcome == "error":
                 errors += 1
-                rally_actions = actions_by_rally[atk.rally_id]
-                idx = next((i for i, a in enumerate(rally_actions) if a.id == atk.id), None)
-                if idx is not None and idx + 1 < len(rally_actions):
-                    nxt = rally_actions[idx + 1]
-                    if nxt.action_type == "block" and nxt.actor_team_id != team_id:
-                        blocked += 1
+                if atk.outcome_detail == "blocked":
+                    blocked += 1
+                elif atk.outcome_detail is None:
+                    rally_actions = actions_by_rally[atk.rally_id]
+                    idx = next((i for i, a in enumerate(rally_actions) if a.id == atk.id), None)
+                    if idx is not None and idx + 1 < len(rally_actions):
+                        nxt = rally_actions[idx + 1]
+                        if nxt.action_type == "block" and nxt.actor_team_id != team_id:
+                            blocked += 1
         total = len(attacks)
         result[team_id] = AttackStats(
             team_id=team_id,

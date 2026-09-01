@@ -1,7 +1,5 @@
 import type { components } from "@volley/contracts";
 
-import { nearestZone } from "@/lib/court-geometry";
-
 /**
  * Types + pure helpers for working with the real ontology read API
  * (docs/domain/ONTOLOGY.md) plus the still-needed synthetic JSON blob
@@ -27,101 +25,11 @@ export type SyntheticMatch = components["schemas"]["SyntheticMatch"];
 export type SyntheticRally = components["schemas"]["SyntheticRally"];
 export type ActionType = ActionOut["action_type"];
 export type ActionResult = OutcomeOut["result"];
-
-// ---------------------------------------------------------------------------
-// Statistics engine result shapes (mirrors volley_domain.stats.engine's
-// dataclasses -- MatchStatisticsOut ships them as permissive dicts on the
-// OpenAPI boundary deliberately, see schemas.py's comment; these types
-// restore a real shape for the frontend to render against).
-// ---------------------------------------------------------------------------
-
-export type Zone = 1 | 2 | 3 | 4 | 5 | 6;
-
-export interface ServeStats {
-  team_id: string;
-  total_serves: number;
-  aces: number;
-  serve_errors: number;
-  zone_counts: Partial<Record<Zone, number>>;
-}
-
-export interface ReceptionStats {
-  team_id: string;
-  total_receptions: number;
-  rated_receptions: number;
-  average_rating: number | null;
-  is_effective: boolean | null;
-}
-
-export interface AttackStats {
-  team_id: string;
-  total_attacks: number;
-  kills: number;
-  errors: number;
-  blocked: number;
-  efficiency: number | null;
-  zone_counts: Partial<Record<Zone, number>>;
-  takeoff_position_counts: Partial<Record<"left" | "middle" | "right", number>>;
-}
-
-export interface BlockStats {
-  team_id: string;
-  total_blocks: number;
-  block_kills: number;
-  block_errors: number;
-}
-
-export interface DigStats {
-  team_id: string;
-  total_digs: number;
-}
-
-export interface SideoutBreakpointStats {
-  team_id: string;
-  serve_rallies: number;
-  serve_points_won: number;
-  breakpoint_pct: number | null;
-  reception_rallies: number;
-  reception_points_won: number;
-  sideout_pct: number | null;
-}
-
-export interface SetterDistributionEntry {
-  setter_roster_id: string;
-  total_sets: number;
-  followed_by_attack: number;
-  zone_counts: Partial<Record<Zone, number>>;
-}
-
-export interface RallyDurationStats {
-  count: number;
-  mean_seconds: number | null;
-  median_seconds: number | null;
-  min_seconds: number | null;
-  max_seconds: number | null;
-}
-
-export interface MatchStatistics {
-  formula_version: string;
-  serve: Record<string, ServeStats>;
-  reception: Record<string, ReceptionStats>;
-  attack: Record<string, AttackStats>;
-  block: Record<string, BlockStats>;
-  dig: Record<string, DigStats>;
-  sideout_breakpoint: Record<string, SideoutBreakpointStats>;
-  setter_distribution: Record<string, SetterDistributionEntry>;
-  rally_duration: RallyDurationStats;
-}
-
-/** MatchStatisticsOut's per-category fields are typed `{[key: string]:
- * unknown}` on the OpenAPI boundary on purpose (see schemas.py) -- this is
- * the one place that re-asserts the real shape, trusting the API contract
- * rather than re-validating every field at runtime. */
-export function asMatchStatistics(
-  raw: components["schemas"]["MatchStatisticsOut"],
-): MatchStatistics {
-  return raw as unknown as MatchStatistics;
-}
+export type MatchStatistics = components["schemas"]["MatchStatisticsOut"];
+export type StatEvidence = components["schemas"]["StatEvidenceOut"];
+export type StatCategory = components["schemas"]["StatCategory"];
+export type Zone = NonNullable<StatEvidence["zone"]>;
+export type VideoOut = components["schemas"]["VideoOut"];
 
 // ---------------------------------------------------------------------------
 // Action taxonomy display metadata (see docs/domain/ONTOLOGY.md's action
@@ -296,66 +204,6 @@ export function pairRallyWithSynthetic(
 // ---------------------------------------------------------------------------
 // Statistic -> Events lookup (client-through requirement)
 // ---------------------------------------------------------------------------
-
-export type StatCategory =
-  | "serve_total"
-  | "serve_aces"
-  | "serve_errors"
-  | "reception_total"
-  | "attack_total"
-  | "attack_kills"
-  | "attack_errors"
-  | "block_total"
-  | "block_kills"
-  | "dig_total";
-
-/** Predicate matching the granular Action rows that make up a given
- * aggregate stat category for one team -- used to build the click-through
- * list from Statistic to Events. Kept in exact correspondence with
- * volley_domain.stats.engine's filters (see engine.py) so the located
- * events genuinely are the ones the number was built from.
- *
- * `zone`, when given, additionally requires the action's own `court_x`/
- * `court_y` to classify to that zone via `nearestZone` -- the same
- * distance-to-anchor classification `stats/engine.py`'s zone_counts uses,
- * so a click on the zone-distribution heatmap resolves to the real events
- * behind that specific zone's count, not just the team-wide total. */
-export function matchesStatCategory(
-  action: ActionOut,
-  category: StatCategory,
-  teamId: string,
-  zone?: Zone,
-): boolean {
-  if (action.actor_team_id !== teamId) return false;
-  if (zone !== undefined && nearestZone(action.court_x, action.court_y) !== zone) return false;
-  const outcome = action.outcome?.result;
-  switch (category) {
-    case "serve_total":
-      return action.action_type === "serve";
-    case "serve_aces":
-      return action.action_type === "serve" && outcome === "point";
-    case "serve_errors":
-      return action.action_type === "serve" && outcome === "error";
-    case "reception_total":
-      return action.action_type === "reception";
-    case "attack_total":
-      return action.action_type === "attack" || action.action_type === "tip";
-    case "attack_kills":
-      return (action.action_type === "attack" || action.action_type === "tip") &&
-        outcome === "point";
-    case "attack_errors":
-      return (action.action_type === "attack" || action.action_type === "tip") &&
-        outcome === "error";
-    case "block_total":
-      return action.action_type === "block";
-    case "block_kills":
-      return action.action_type === "block" && outcome === "point";
-    case "dig_total":
-      return action.action_type === "dig";
-    default:
-      return false;
-  }
-}
 
 export function formatPercent(value: number | null | undefined): string {
   if (value === null || value === undefined) return "—";

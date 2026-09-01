@@ -1,0 +1,4221 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Volley Intelligence API",
+    "description": "Org-scoped API for match management and pipeline processing.",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/healthz": {
+      "get": {
+        "tags": [
+          "health"
+        ],
+        "summary": "Liveness",
+        "description": "Liveness: process is up. No dependency checks -- a slow DB must never\ncause an orchestrator to kill and restart a perfectly healthy process.",
+        "operationId": "liveness_healthz_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Liveness Healthz Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/readyz": {
+      "get": {
+        "tags": [
+          "health"
+        ],
+        "summary": "Readiness",
+        "description": "Readiness: dependencies the API actually needs are reachable.",
+        "operationId": "readiness_readyz_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Readiness Readyz Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/matches": {
+      "get": {
+        "tags": [
+          "matches"
+        ],
+        "summary": "List Matches",
+        "operationId": "list_matches_api_v1_matches_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/MatchOut"
+                  },
+                  "type": "array",
+                  "title": "Response List Matches Api V1 Matches Get"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "matches"
+        ],
+        "summary": "Create Match",
+        "operationId": "create_match_api_v1_matches_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MatchCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MatchOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/matches/{match_id}": {
+      "get": {
+        "tags": [
+          "matches"
+        ],
+        "summary": "Get Match",
+        "operationId": "get_match_api_v1_matches__match_id__get",
+        "parameters": [
+          {
+            "name": "match_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Match Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MatchOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "matches"
+        ],
+        "summary": "Delete Match",
+        "description": "Permanently deletes a match. Every `MatchSet`/`Rally`/.../`Outcome`\nrow and `ProcessingJob` row cascades at the DB level (all already\n`ondelete=\"CASCADE\"` from `matches.id`). Any `Video` linked to this\nmatch only has that link cleared (`ondelete=\"SET NULL\"` on\n`Video.match_id`) -- deleting a match never deletes the video footage\nitself; use `DELETE /videos/{id}` separately for that.",
+        "operationId": "delete_match_api_v1_matches__match_id__delete",
+        "parameters": [
+          {
+            "name": "match_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Match Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/matches/{match_id}/demo-process": {
+      "post": {
+        "tags": [
+          "matches"
+        ],
+        "summary": "Trigger Demo Process",
+        "operationId": "trigger_demo_process_api_v1_matches__match_id__demo_process_post",
+        "parameters": [
+          {
+            "name": "match_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Match Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProcessingJobOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/jobs/{job_id}": {
+      "get": {
+        "tags": [
+          "matches"
+        ],
+        "summary": "Get Job",
+        "operationId": "get_job_api_v1_jobs__job_id__get",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProcessingJobOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/matches/{match_id}/result": {
+      "get": {
+        "tags": [
+          "matches"
+        ],
+        "summary": "Get Match Result",
+        "operationId": "get_match_result_api_v1_matches__match_id__result_get",
+        "parameters": [
+          {
+            "name": "match_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Match Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SyntheticMatch"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/matches/{match_id}/sets": {
+      "get": {
+        "tags": [
+          "ontology"
+        ],
+        "summary": "List Sets",
+        "operationId": "list_sets_api_v1_matches__match_id__sets_get",
+        "parameters": [
+          {
+            "name": "match_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Match Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MatchSetOut"
+                  },
+                  "title": "Response List Sets Api V1 Matches  Match Id  Sets Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/matches/{match_id}/rallies": {
+      "get": {
+        "tags": [
+          "ontology"
+        ],
+        "summary": "List Rallies",
+        "operationId": "list_rallies_api_v1_matches__match_id__rallies_get",
+        "parameters": [
+          {
+            "name": "match_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Match Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RallyOut"
+                  },
+                  "title": "Response List Rallies Api V1 Matches  Match Id  Rallies Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/rallies/{rally_id}/actions": {
+      "get": {
+        "tags": [
+          "ontology"
+        ],
+        "summary": "List Rally Actions",
+        "operationId": "list_rally_actions_api_v1_rallies__rally_id__actions_get",
+        "parameters": [
+          {
+            "name": "rally_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Rally Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ActionOut"
+                  },
+                  "title": "Response List Rally Actions Api V1 Rallies  Rally Id  Actions Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/rallies/{rally_id}/analysis": {
+      "get": {
+        "tags": [
+          "ontology"
+        ],
+        "summary": "Get Rally Analysis",
+        "description": "Return the newest completed, internally consistent analysis bundle.\n\nThe result row carries ``organization_id`` specifically so the tenant\nboundary is enforced directly in the query. Joining the PipelineRun and\nrequiring COMPLETED prevents partially published worker output from\nbecoming visible in replay clients.",
+        "operationId": "get_rally_analysis_api_v1_rallies__rally_id__analysis_get",
+        "parameters": [
+          {
+            "name": "rally_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Rally Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RallyAnalysisResultOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/matches/{match_id}/statistics": {
+      "get": {
+        "tags": [
+          "ontology"
+        ],
+        "summary": "Get Match Statistics",
+        "description": "Computes statistics fresh from the Event Log every call -- per\nONTOLOGY.md, DerivedMetric is never persisted as a mutable number.",
+        "operationId": "get_match_statistics_api_v1_matches__match_id__statistics_get",
+        "parameters": [
+          {
+            "name": "match_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Match Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MatchStatisticsOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/matches/{match_id}/statistics/evidence": {
+      "get": {
+        "tags": [
+          "ontology"
+        ],
+        "summary": "Get Stat Evidence",
+        "description": "Return the exact Event Log rows behind one displayed statistic.\n\nThis replaces the browser's former one-request-per-rally fan-out with a\nsingle org-scoped query and a canonical server-side predicate shared by\nall consumers. The response is deliberately bounded and reports when it\nhas been truncated.",
+        "operationId": "get_stat_evidence_api_v1_matches__match_id__statistics_evidence_get",
+        "parameters": [
+          {
+            "name": "match_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Match Id"
+            }
+          },
+          {
+            "name": "category",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/StatCategory"
+            }
+          },
+          {
+            "name": "team_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Team Id"
+            }
+          },
+          {
+            "name": "zone",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "maximum": 6,
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Zone"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "default": 200,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatEvidenceOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/videos": {
+      "get": {
+        "tags": [
+          "videos"
+        ],
+        "summary": "List Videos",
+        "operationId": "list_videos_api_v1_videos_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/VideoOut"
+                  },
+                  "type": "array",
+                  "title": "Response List Videos Api V1 Videos Get"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "videos"
+        ],
+        "summary": "Create Video Upload",
+        "operationId": "create_video_upload_api_v1_videos_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VideoUploadRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VideoUploadResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/storage/local-upload/{key}": {
+      "put": {
+        "tags": [
+          "videos"
+        ],
+        "summary": "Local Upload",
+        "description": "The local-dev stand-in for a real signed R2 PUT URL -- see\nvolley_storage.local.LocalFilesystemStorageAdapter's module docstring.\nNever reachable in production (STORAGE_BACKEND=r2 there, so\ncreate_video_upload never issues a URL pointing here, and\nSettings._local_storage_cannot_reach_production refuses to even start\nwith STORAGE_BACKEND=local outside dev/test).\n\nNot a scalability claim for real multi-GB uploads -- production traffic\nnever hits this route at all: R2's real presigned PUT goes directly\nfrom the browser to R2, per DATA_FLOW.md's \"video bytes never transit\nFastAPI\" rule. This route is the one deliberate, documented exception\nto that rule, scoped to local dev only.",
+        "operationId": "local_upload_api_v1_storage_local_upload__key__put",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          },
+          {
+            "name": "token",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Token"
+            }
+          },
+          {
+            "name": "expires_at",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Expires At"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/videos/{video_id}/complete-upload": {
+      "post": {
+        "tags": [
+          "videos"
+        ],
+        "summary": "Complete Video Upload",
+        "operationId": "complete_video_upload_api_v1_videos__video_id__complete_upload_post",
+        "parameters": [
+          {
+            "name": "video_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Video Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VideoOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/videos/{video_id}": {
+      "get": {
+        "tags": [
+          "videos"
+        ],
+        "summary": "Get Video",
+        "operationId": "get_video_api_v1_videos__video_id__get",
+        "parameters": [
+          {
+            "name": "video_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Video Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VideoOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "videos"
+        ],
+        "summary": "Delete Video",
+        "description": "Permanently deletes a video: every `VideoAsset`/`PipelineRun`/\n`ModelRun`/`VideoDetectionFrame` row cascades at the DB level (all\nalready `ondelete=\"CASCADE\"` from `videos.id` -- see ontology.py), and\nevery real object this video ever wrote to storage (original + any\nproxy/clip assets) is deleted too, not just the DB row -- otherwise the\nactual video bytes silently outlive every reference to them. A video\nlinked to a `Match` only has that link cleared (`ondelete=\"SET NULL\"`)\n-- deleting a video never deletes the match it was attached to.",
+        "operationId": "delete_video_api_v1_videos__video_id__delete",
+        "parameters": [
+          {
+            "name": "video_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Video Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/videos/{video_id}/playback-url": {
+      "get": {
+        "tags": [
+          "videos"
+        ],
+        "summary": "Get Video Playback Url",
+        "description": "Issues a short-lived signed GET target for a <video> element's\n`src` -- the read-side counterpart of POST /videos' signed upload,\nsame \"bytes never transit FastAPI\" rule (DATA_FLOW.md). Requires a\nreal JWT-authenticated, org-scoped principal (unlike the local-upload/\nlocal-download routes below, which are authorized purely by their own\nsigned token, matching how a real presigned URL works) -- this route\nis what *hands out* that token in the first place, so it's the actual\naccess-control checkpoint.",
+        "operationId": "get_video_playback_url_api_v1_videos__video_id__playback_url_get",
+        "parameters": [
+          {
+            "name": "video_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Video Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VideoPlaybackResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/videos/{video_id}/detect": {
+      "post": {
+        "tags": [
+          "videos"
+        ],
+        "summary": "Trigger Video Detection",
+        "description": "Enqueues the exploratory RF-DETR detection pipeline (see\nvolley_worker.detection) for a real uploaded video. Idempotent per the\nsame rule matches.py's demo-process trigger and complete_video_upload\nalready use: a QUEUED/RUNNING/COMPLETED run for this video is reused,\nnever double-enqueued; a FAILED run gets a fresh PipelineRun row (see\nPipelineRun's own \"one execution\" docstring -- unlike ProcessingJob, a\nretry here is a new row, not a mutated one). An optional body lets the\ncaller cap processing to the video's own first `max_duration_seconds`\n-- ignored when an existing run is reused below, matching how every\nother field of a reused run reflects the *original* trigger, not the\nnew request. `start_offset_seconds` similarly lets the caller skip a\nreal match's warmup/pre-play footage and start analysis from the\nmoment play actually begins (see extract_frames_at_fps's docstring).\n`sample_fps` overrides the worker's env-configured detection rate for\nthis one run.",
+        "operationId": "trigger_video_detection_api_v1_videos__video_id__detect_post",
+        "parameters": [
+          {
+            "name": "video_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Video Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/TriggerDetectionRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TriggerDetectionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/videos/{video_id}/detection-status": {
+      "get": {
+        "tags": [
+          "videos"
+        ],
+        "summary": "Get Video Detection Status",
+        "description": "Polled by the frontend after POST .../detect. Returns an honest\nall-None/zero shape when no detection run has ever been triggered for\nthis video -- never a fabricated empty result (CLAUDE.md's abstention\nprinciple).",
+        "operationId": "get_video_detection_status_api_v1_videos__video_id__detection_status_get",
+        "parameters": [
+          {
+            "name": "video_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Video Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VideoDetectionStatusOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/videos/{video_id}/detections": {
+      "get": {
+        "tags": [
+          "videos"
+        ],
+        "summary": "List Video Detections",
+        "description": "Returns the latest COMPLETED detection run's per-frame boxes, in\nframe order. An empty list covers both \"never analyzed\" and \"analysis\nstill running\" -- callers should check detection-status first to tell\nthose apart, exactly like the video library already treats an empty\n`duration_seconds` as \"probe pending\", not \"zero-length video\".",
+        "operationId": "list_video_detections_api_v1_videos__video_id__detections_get",
+        "parameters": [
+          {
+            "name": "video_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Video Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/VideoDetectionFrameOut"
+                  },
+                  "title": "Response List Video Detections Api V1 Videos  Video Id  Detections Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/storage/local-download/{key}": {
+      "get": {
+        "tags": [
+          "videos"
+        ],
+        "summary": "Local Download",
+        "description": "The local-dev stand-in for a real signed R2 GET URL -- the read-side\nmirror of local_upload above. Never reachable in production for the\nsame reasons local_upload isn't (STORAGE_BACKEND=r2 there; a real R2\npresigned GET streams the browser <video> element directly from R2,\nnever through this API).\n\nAuthorized purely by the signed `token` (which encodes \"download\",\ndistinct from an \"upload\" token for the same key -- see\nLocalFilesystemStorageAdapter._token_for's docstring), not a JWT --\nthis matches exactly how a real presigned URL works: whoever holds the\nURL can fetch it, no separate bearer auth required, for the token's\nlimited lifetime.",
+        "operationId": "local_download_api_v1_storage_local_download__key__get",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          },
+          {
+            "name": "token",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Token"
+            }
+          },
+          {
+            "name": "expires_at",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Expires At"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ActionOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "phase_id": {
+            "type": "string",
+            "title": "Phase Id"
+          },
+          "rally_id": {
+            "type": "string",
+            "title": "Rally Id"
+          },
+          "action_type": {
+            "type": "string",
+            "enum": [
+              "serve",
+              "reception",
+              "set",
+              "attack",
+              "tip",
+              "block",
+              "dig",
+              "free_ball",
+              "transition"
+            ],
+            "title": "Action Type"
+          },
+          "actor_team_id": {
+            "type": "string",
+            "title": "Actor Team Id"
+          },
+          "actor_roster_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor Roster Id"
+          },
+          "video_t_start": {
+            "type": "number",
+            "title": "Video T Start"
+          },
+          "video_t_end": {
+            "type": "number",
+            "title": "Video T End"
+          },
+          "court_x": {
+            "type": "number",
+            "title": "Court X"
+          },
+          "court_y": {
+            "type": "number",
+            "title": "Court Y"
+          },
+          "confidence": {
+            "type": "number",
+            "title": "Confidence"
+          },
+          "reviewed_status": {
+            "type": "string",
+            "enum": [
+              "unreviewed",
+              "confirmed",
+              "corrected"
+            ],
+            "title": "Reviewed Status"
+          },
+          "quality_rating": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quality Rating"
+          },
+          "outcome": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OutcomeOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "phase_id",
+          "rally_id",
+          "action_type",
+          "actor_team_id",
+          "actor_roster_id",
+          "video_t_start",
+          "video_t_end",
+          "court_x",
+          "court_y",
+          "confidence",
+          "reviewed_status",
+          "quality_rating"
+        ],
+        "title": "ActionOut"
+      },
+      "ActionType": {
+        "type": "string",
+        "enum": [
+          "serve",
+          "reception",
+          "set",
+          "attack",
+          "tip",
+          "block",
+          "dig",
+          "free_ball",
+          "transition"
+        ],
+        "title": "ActionType"
+      },
+      "AnalysisCalibration": {
+        "properties": {
+          "calibration_id": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Calibration Id"
+          },
+          "frame_width_px": {
+            "type": "integer",
+            "minimum": 1,
+            "title": "Frame Width Px"
+          },
+          "frame_height_px": {
+            "type": "integer",
+            "minimum": 1,
+            "title": "Frame Height Px"
+          },
+          "confidence": {
+            "type": "number",
+            "maximum": 1,
+            "minimum": 0,
+            "title": "Confidence"
+          },
+          "reprojection_error_px": {
+            "type": "number",
+            "minimum": 0,
+            "title": "Reprojection Error Px"
+          },
+          "supports_court_plane": {
+            "type": "boolean",
+            "title": "Supports Court Plane"
+          },
+          "supports_metric_3d": {
+            "type": "boolean",
+            "title": "Supports Metric 3D"
+          },
+          "camera_count": {
+            "type": "integer",
+            "minimum": 1,
+            "title": "Camera Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "calibration_id",
+          "frame_width_px",
+          "frame_height_px",
+          "confidence",
+          "reprojection_error_px",
+          "supports_court_plane",
+          "supports_metric_3d",
+          "camera_count"
+        ],
+        "title": "AnalysisCalibration"
+      },
+      "AnalysisCapability": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "available",
+              "estimated",
+              "abstained",
+              "unavailable"
+            ],
+            "title": "Status"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "AnalysisCapability"
+      },
+      "AnalysisModelRunRef": {
+        "properties": {
+          "stage": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Stage"
+          },
+          "model_run_id": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Model Run Id"
+          },
+          "model_version": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Model Version"
+          },
+          "weights_sha256": {
+            "type": "string",
+            "pattern": "^[a-fA-F0-9]{64}$",
+            "title": "Weights Sha256"
+          },
+          "dataset_version": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Dataset Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "stage",
+          "model_run_id",
+          "model_version",
+          "weights_sha256",
+          "dataset_version"
+        ],
+        "title": "AnalysisModelRunRef"
+      },
+      "AnalysisPoseKeypoint": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "pixel": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PixelPoint"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "world_3d": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SpatialEstimate3D"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "confidence": {
+            "type": "number",
+            "maximum": 1,
+            "minimum": 0,
+            "title": "Confidence"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "confidence"
+        ],
+        "title": "AnalysisPoseKeypoint"
+      },
+      "AnalysisProvenance": {
+        "properties": {
+          "organization_id": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Organization Id"
+          },
+          "video_id": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Video Id"
+          },
+          "video_hash": {
+            "type": "string",
+            "pattern": "^[a-fA-F0-9]{64}$",
+            "title": "Video Hash"
+          },
+          "pipeline_run_id": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Pipeline Run Id"
+          },
+          "pipeline_version": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Pipeline Version"
+          },
+          "config_sha256": {
+            "type": "string",
+            "pattern": "^[a-fA-F0-9]{64}$",
+            "title": "Config Sha256"
+          },
+          "code_commit": {
+            "type": "string",
+            "pattern": "^[a-fA-F0-9]{7,64}$",
+            "title": "Code Commit"
+          },
+          "model_runs": {
+            "items": {
+              "$ref": "#/components/schemas/AnalysisModelRunRef"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Model Runs"
+          }
+        },
+        "type": "object",
+        "required": [
+          "organization_id",
+          "video_id",
+          "video_hash",
+          "pipeline_run_id",
+          "pipeline_version",
+          "config_sha256",
+          "code_commit",
+          "model_runs"
+        ],
+        "title": "AnalysisProvenance"
+      },
+      "AnalyzedContact": {
+        "properties": {
+          "contact_id": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Contact Id"
+          },
+          "contact_index": {
+            "type": "integer",
+            "minimum": 1,
+            "title": "Contact Index"
+          },
+          "frame": {
+            "$ref": "#/components/schemas/SourceFrameRef"
+          },
+          "actor_track_id": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Actor Track Id"
+          },
+          "team": {
+            "type": "string",
+            "enum": [
+              "home",
+              "away"
+            ],
+            "title": "Team"
+          },
+          "action_type": {
+            "$ref": "#/components/schemas/ActionType"
+          },
+          "contact_surface": {
+            "type": "string",
+            "enum": [
+              "left_hand",
+              "right_hand",
+              "both_hands",
+              "forearms",
+              "head",
+              "foot",
+              "other",
+              "unknown"
+            ],
+            "title": "Contact Surface"
+          },
+          "ball_center_pixel": {
+            "$ref": "#/components/schemas/PixelPoint"
+          },
+          "ball_world_3d": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SpatialEstimate3D"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "contact_height": {
+            "$ref": "#/components/schemas/ScalarMeasurement"
+          },
+          "incoming_velocity_mps": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Vector3D"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "outgoing_velocity_mps": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Vector3D"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "target_court_point": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SpatialEstimate3D"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "confidence": {
+            "type": "number",
+            "maximum": 1,
+            "minimum": 0,
+            "title": "Confidence"
+          }
+        },
+        "type": "object",
+        "required": [
+          "contact_id",
+          "contact_index",
+          "frame",
+          "actor_track_id",
+          "team",
+          "action_type",
+          "contact_surface",
+          "ball_center_pixel",
+          "contact_height",
+          "confidence"
+        ],
+        "title": "AnalyzedContact"
+      },
+      "AttackStatsOut": {
+        "properties": {
+          "team_id": {
+            "type": "string",
+            "title": "Team Id"
+          },
+          "total_attacks": {
+            "type": "integer",
+            "minimum": 0,
+            "title": "Total Attacks"
+          },
+          "kills": {
+            "type": "integer",
+            "minimum": 0,
+            "title": "Kills"
+          },
+          "errors": {
+            "type": "integer",
+            "minimum": 0,
+            "title": "Errors"
+          },
+          "blocked": {
+            "type": "integer",
+            "minimum": 0,
+            "title": "Blocked"
+          },
+          "efficiency": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Efficiency"
+          },
+          "zone_counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Zone Counts"
+          },
+          "takeoff_position_counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "propertyNames": {
+              "enum": [
+                "left",
+                "middle",
+                "right"
+              ]
+            },
+            "type": "object",
+            "title": "Takeoff Position Counts"
+          }
+        },
+        "type": "object",
+        "required": [
+          "team_id",
+          "total_attacks",
+          "kills",
+          "errors",
+          "blocked",
+          "efficiency",
+          "zone_counts",
+          "takeoff_position_counts"
+        ],
+        "title": "AttackStatsOut"
+      },
+      "BallDetectionBoxOut": {
+        "properties": {
+          "candidate_id": {
+            "type": "string",
+            "title": "Candidate Id"
+          },
+          "bbox": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Bbox"
+          },
+          "confidence": {
+            "type": "number",
+            "maximum": 1,
+            "minimum": 0,
+            "title": "Confidence"
+          },
+          "is_static_false_positive": {
+            "type": "boolean",
+            "title": "Is Static False Positive",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "candidate_id",
+          "bbox",
+          "confidence"
+        ],
+        "title": "BallDetectionBoxOut",
+        "description": "One ball box within a `VideoDetectionFrameOut`'s `balls` list -- a\nsingle-frame observed pixel position only (RF-DETR's COCO \"sports\nball\" class), never a trajectory point. Deliberately has no\n`temporal_source`/velocity/court-plane fields: those require a working\ncourt-calibration pipeline this project doesn't have yet for real\nvideo (CLAUDE.md's fixed Ball decision -- \"never a normal detector\nclass... never present interpolation as observation\"). Any smoothing\nbetween two of these real observed points (e.g. for playback) happens\nclient-side at render time and is never persisted as a new observation.\n\n`is_static_false_positive` is set by a post-run pass\n(volley_worker.ball_filtering) when this exact screen position recurs\nacross a span of many seconds -- found empirically against real\nfootage to be the signature of a fixed scene object (a court logo, an\nad board), not the real ball, which is never stationary that long\nduring active play. Never deletes the underlying detection -- see that\nmodule's docstring for why this stays a flag, not a filter applied\nbefore storage."
+      },
+      "BallPositionSample": {
+        "properties": {
+          "t": {
+            "type": "number",
+            "title": "T"
+          },
+          "x": {
+            "type": "number",
+            "maximum": 1,
+            "minimum": 0,
+            "title": "X"
+          },
+          "y": {
+            "type": "number",
+            "maximum": 1,
+            "minimum": 0,
+            "title": "Y"
+          },
+          "z": {
+            "type": "number",
+            "minimum": 0,
+            "title": "Z",
+            "description": "normalized height, 0 = floor"
+          },
+          "provenance": {
+            "type": "string",
+            "enum": [
+              "observed",
+              "interpolated",
+              "predicted"
+            ],
+            "title": "Provenance"
+          },
+          "confidence": {
+            "type": "number",
+            "maximum": 1,
+            "minimum": 0,
+            "title": "Confidence"
+          }
+        },
+        "type": "object",
+        "required": [
+          "t",
+          "x",
+          "y",
+          "z",
+          "provenance",
+          "confidence"
+        ],
+        "title": "BallPositionSample"
+      },
+      "BallProvenance": {
+        "type": "string",
+        "enum": [
+          "observed",
+          "interpolated",
+          "predicted"
+        ],
+        "title": "BallProvenance"
+      },
+      "BallTrajectorySample": {
+        "properties": {
+          "frame": {
+            "$ref": "#/components/schemas/SourceFrameRef"
+          },
+          "center_pixel": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PixelPoint"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "world_3d": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SpatialEstimate3D"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "velocity_mps": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Vector3D"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "provenance": {
+            "$ref": "#/components/schemas/BallProvenance"
+          },
+          "confidence": {
+            "type": "number",
+            "maximum": 1,
+            "minimum": 0,
+            "title": "Confidence"
+          }
+        },
+        "type": "object",
+        "required": [
+          "frame",
+          "provenance",
+          "confidence"
+        ],
+        "title": "BallTrajectorySample"
+      },
+      "BlockStatsOut": {
+        "properties": {
+          "team_id": {
+            "type": "string",
+            "title": "Team Id"
+          },
+          "total_blocks": {
+            "type": "integer",
+            "minimum": 0,
+            "title": "Total Blocks"
+          },
+          "block_kills": {
+            "type": "integer",
+            "minimum": 0,
+            "title": "Block Kills"
+          },
+          "block_errors": {
+            "type": "integer",
+            "minimum": 0,
+            "title": "Block Errors"
+          }
+        },
+        "type": "object",
+        "required": [
+          "team_id",
+          "total_blocks",
+          "block_kills",
+          "block_errors"
+        ],
+        "title": "BlockStatsOut"
+      },
+      "BoundingBox": {
+        "properties": {
+          "x": {
+            "type": "number",
+            "maximum": 1,
+            "minimum": 0,
+            "title": "X"
+          },
+          "y": {
+            "type": "number",
+            "maximum": 1,
+            "minimum": 0,
+            "title": "Y"
+          },
+          "width": {
+            "type": "number",
+            "maximum": 1,
+            "minimum": 0,
+            "title": "Width"
+          },
+          "height": {
+            "type": "number",
+            "maximum": 1,
+            "minimum": 0,
+            "title": "Height"
+          }
+        },
+        "type": "object",
+        "required": [
+          "x",
+          "y",
+          "width",
+          "height"
+        ],
+        "title": "BoundingBox",
+        "description": "Normalized (0-1) top-left + width/height -- FiftyOne's own\n`Detection.bounding_box` convention, adopted here directly so the\nto/from-FiftyOne converters below are a straight field mapping rather\nthan a coordinate-system translation."
+      },
+      "DetectionBoxOut": {
+        "properties": {
+          "candidate_id": {
+            "type": "string",
+            "title": "Candidate Id"
+          },
+          "bbox": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Bbox"
+          },
+          "confidence": {
+            "type": "number",
+            "maximum": 1,
+            "minimum": 0,
+            "title": "Confidence"
+          },
+          "jersey_color_outlier": {
+            "type": "boolean",
+            "title": "Jersey Color Outlier",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "candidate_id",
+          "bbox",
+          "confidence"
+        ],
+        "title": "DetectionBoxOut",
+        "description": "One box within a `VideoDetectionFrameOut`'s `detections` list --\ndeliberately a small projection of `PlayerTrackPreannotation` (see\nvolley_domain.preannotation), not the full model: the frontend overlay\nonly ever needs bbox/confidence/outlier flag, and re-declaring the full\nprovenance/review-audit shape here would let a client mistake this\nexploratory overlay for a reviewable CVAT preannotation, which it is\nnot (nothing here is queued for human review)."
+      },
+      "DigStatsOut": {
+        "properties": {
+          "team_id": {
+            "type": "string",
+            "title": "Team Id"
+          },
+          "total_digs": {
+            "type": "integer",
+            "minimum": 0,
+            "title": "Total Digs"
+          }
+        },
+        "type": "object",
+        "required": [
+          "team_id",
+          "total_digs"
+        ],
+        "title": "DigStatsOut"
+      },
+      "DownloadTargetOut": {
+        "properties": {
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expires At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "url",
+          "expires_at"
+        ],
+        "title": "DownloadTargetOut",
+        "description": "Shape of a signed-download target -- mirrors what a real S3/R2\npresigned GET looks like (just a url + expiry; unlike upload there's\nno method/headers the client must set, a <video> element's `src` or a\nplain `fetch` both just GET the url directly). See\nvolley_storage.base.DownloadTarget."
+      },
+      "FrameRef": {
+        "properties": {
+          "frame_index": {
+            "type": "integer",
+            "minimum": 0,
+            "title": "Frame Index"
+          },
+          "timestamp_seconds": {
+            "type": "number",
+            "minimum": 0,
+            "title": "Timestamp Seconds"
+          }
+        },
+        "type": "object",
+        "required": [
+          "frame_index",
+          "timestamp_seconds"
+        ],
+        "title": "FrameRef",
+        "description": "Mirrors DATA_FLOW.md's rule that a frame is never referenced by\nframe number alone: both the proxy/source frame index used by the\nannotation tool and the normalized analysis timestamp it maps to."
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "JobStatus": {
+        "type": "string",
+        "enum": [
+          "queued",
+          "running",
+          "completed",
+          "failed"
+        ],
+        "title": "JobStatus"
+      },
+      "MatchCreate": {
+        "properties": {
+          "home_team": {
+            "type": "string",
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Home Team"
+          },
+          "away_team": {
+            "type": "string",
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Away Team"
+          },
+          "scheduled_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scheduled At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "home_team",
+          "away_team"
+        ],
+        "title": "MatchCreate"
+      },
+      "MatchOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "organization_id": {
+            "type": "string",
+            "title": "Organization Id"
+          },
+          "home_team": {
+            "type": "string",
+            "title": "Home Team"
+          },
+          "away_team": {
+            "type": "string",
+            "title": "Away Team"
+          },
+          "home_team_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Home Team Id"
+          },
+          "away_team_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Away Team Id"
+          },
+          "scheduled_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scheduled At"
+          },
+          "status": {
+            "$ref": "#/components/schemas/MatchStatus"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "organization_id",
+          "home_team",
+          "away_team",
+          "home_team_id",
+          "away_team_id",
+          "scheduled_at",
+          "status",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "MatchOut"
+      },
+      "MatchSetOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "match_id": {
+            "type": "string",
+            "title": "Match Id"
+          },
+          "index": {
+            "type": "integer",
+            "title": "Index"
+          },
+          "home_points": {
+            "type": "integer",
+            "title": "Home Points"
+          },
+          "away_points": {
+            "type": "integer",
+            "title": "Away Points"
+          },
+          "winner_team_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Winner Team Id"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "match_id",
+          "index",
+          "home_points",
+          "away_points",
+          "winner_team_id",
+          "created_at"
+        ],
+        "title": "MatchSetOut"
+      },
+      "MatchStatisticsOut": {
+        "properties": {
+          "formula_version": {
+            "type": "string",
+            "title": "Formula Version"
+          },
+          "serve": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ServeStatsOut"
+            },
+            "type": "object",
+            "title": "Serve"
+          },
+          "reception": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ReceptionStatsOut"
+            },
+            "type": "object",
+            "title": "Reception"
+          },
+          "attack": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/AttackStatsOut"
+            },
+            "type": "object",
+            "title": "Attack"
+          },
+          "block": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/BlockStatsOut"
+            },
+            "type": "object",
+            "title": "Block"
+          },
+          "dig": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/DigStatsOut"
+            },
+            "type": "object",
+            "title": "Dig"
+          },
+          "sideout_breakpoint": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/SideoutBreakpointStatsOut"
+            },
+            "type": "object",
+            "title": "Sideout Breakpoint"
+          },
+          "setter_distribution": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/SetterDistributionEntryOut"
+            },
+            "type": "object",
+            "title": "Setter Distribution"
+          },
+          "rally_duration": {
+            "$ref": "#/components/schemas/RallyDurationStatsOut"
+          }
+        },
+        "type": "object",
+        "required": [
+          "formula_version",
+          "serve",
+          "reception",
+          "attack",
+          "block",
+          "dig",
+          "sideout_breakpoint",
+          "setter_distribution",
+          "rally_duration"
+        ],
+        "title": "MatchStatisticsOut",
+        "description": "Versioned, fully typed public contract for every computed metric.\n\nThe pure engine remains the formula source of truth; these models make\nshape changes visible in OpenAPI and therefore at TypeScript compile\ntime instead of failing inside a chart at runtime."
+      },
+      "MatchStatus": {
+        "type": "string",
+        "enum": [
+          "draft",
+          "demo_ready",
+          "processing",
+          "completed",
+          "failed"
+        ],
+        "title": "MatchStatus"
+      },
+      "OutcomeOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "result": {
+            "type": "string",
+            "enum": [
+              "continue",
+              "point",
+              "error"
+            ],
+            "title": "Result"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "result",
+          "detail"
+        ],
+        "title": "OutcomeOut"
+      },
+      "PipelineRunStatusOut": {
+        "type": "string",
+        "enum": [
+          "queued",
+          "running",
+          "completed",
+          "failed"
+        ],
+        "title": "PipelineRunStatusOut"
+      },
+      "PixelPoint": {
+        "properties": {
+          "x": {
+            "type": "number",
+            "minimum": 0,
+            "title": "X"
+          },
+          "y": {
+            "type": "number",
+            "minimum": 0,
+            "title": "Y"
+          }
+        },
+        "type": "object",
+        "required": [
+          "x",
+          "y"
+        ],
+        "title": "PixelPoint"
+      },
+      "PlayerPositionSample": {
+        "properties": {
+          "t": {
+            "type": "number",
+            "title": "T"
+          },
+          "player_id": {
+            "type": "string",
+            "title": "Player Id"
+          },
+          "team": {
+            "type": "string",
+            "enum": [
+              "home",
+              "away"
+            ],
+            "title": "Team"
+          },
+          "x": {
+            "type": "number",
+            "maximum": 1,
+            "minimum": 0,
+            "title": "X"
+          },
+          "y": {
+            "type": "number",
+            "maximum": 1,
+            "minimum": 0,
+            "title": "Y"
+          }
+        },
+        "type": "object",
+        "required": [
+          "t",
+          "player_id",
+          "team",
+          "x",
+          "y"
+        ],
+        "title": "PlayerPositionSample"
+      },
+      "PlayerStateSample": {
+        "properties": {
+          "frame": {
+            "$ref": "#/components/schemas/SourceFrameRef"
+          },
+          "track_id": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Track Id"
+          },
+          "roster_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Roster Id"
+          },
+          "team": {
+            "type": "string",
+            "enum": [
+              "home",
+              "away"
+            ],
+            "title": "Team"
+          },
+          "bbox": {
+            "$ref": "#/components/schemas/BoundingBox"
+          },
+          "court_anchor": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SpatialEstimate3D"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "pose": {
+            "items": {
+              "$ref": "#/components/schemas/AnalysisPoseKeypoint"
+            },
+            "type": "array",
+            "title": "Pose"
+          },
+          "confidence": {
+            "type": "number",
+            "maximum": 1,
+            "minimum": 0,
+            "title": "Confidence"
+          }
+        },
+        "type": "object",
+        "required": [
+          "frame",
+          "track_id",
+          "team",
+          "bbox",
+          "confidence"
+        ],
+        "title": "PlayerStateSample"
+      },
+      "ProcessingJobOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "match_id": {
+            "type": "string",
+            "title": "Match Id"
+          },
+          "task_name": {
+            "type": "string",
+            "title": "Task Name"
+          },
+          "status": {
+            "$ref": "#/components/schemas/JobStatus"
+          },
+          "progress": {
+            "type": "integer",
+            "maximum": 100,
+            "minimum": 0,
+            "title": "Progress"
+          },
+          "stage": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stage"
+          },
+          "attempt": {
+            "type": "integer",
+            "title": "Attempt"
+          },
+          "result_data": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result Data"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "match_id",
+          "task_name",
+          "status",
+          "progress",
+          "stage",
+          "attempt",
+          "result_data",
+          "error",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "ProcessingJobOut"
+      },
+      "RallyAnalysisBundle": {
+        "properties": {
+          "schema_version": {
+            "type": "string",
+            "const": "rally-analysis-v1",
+            "title": "Schema Version",
+            "default": "rally-analysis-v1"
+          },
+          "provenance": {
+            "$ref": "#/components/schemas/AnalysisProvenance"
+          },
+          "rally_id": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Rally Id"
+          },
+          "set_index": {
+            "type": "integer",
+            "maximum": 5,
+            "minimum": 1,
+            "title": "Set Index"
+          },
+          "rally_index_in_set": {
+            "type": "integer",
+            "minimum": 1,
+            "title": "Rally Index In Set"
+          },
+          "start_frame": {
+            "$ref": "#/components/schemas/SourceFrameRef"
+          },
+          "end_frame": {
+            "$ref": "#/components/schemas/SourceFrameRef"
+          },
+          "calibration": {
+            "$ref": "#/components/schemas/AnalysisCalibration"
+          },
+          "ball_trajectory": {
+            "items": {
+              "$ref": "#/components/schemas/BallTrajectorySample"
+            },
+            "type": "array",
+            "title": "Ball Trajectory"
+          },
+          "player_states": {
+            "items": {
+              "$ref": "#/components/schemas/PlayerStateSample"
+            },
+            "type": "array",
+            "title": "Player States"
+          },
+          "contacts": {
+            "items": {
+              "$ref": "#/components/schemas/AnalyzedContact"
+            },
+            "type": "array",
+            "title": "Contacts"
+          },
+          "biomechanical_metrics": {
+            "items": {
+              "$ref": "#/components/schemas/ScalarMeasurement"
+            },
+            "type": "array",
+            "title": "Biomechanical Metrics"
+          },
+          "capabilities": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/AnalysisCapability"
+            },
+            "type": "object",
+            "title": "Capabilities"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Warnings"
+          }
+        },
+        "type": "object",
+        "required": [
+          "provenance",
+          "rally_id",
+          "set_index",
+          "rally_index_in_set",
+          "start_frame",
+          "end_frame",
+          "calibration",
+          "ball_trajectory",
+          "player_states",
+          "contacts",
+          "capabilities"
+        ],
+        "title": "RallyAnalysisBundle"
+      },
+      "RallyAnalysisResultOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "organization_id": {
+            "type": "string",
+            "title": "Organization Id"
+          },
+          "match_id": {
+            "type": "string",
+            "title": "Match Id"
+          },
+          "rally_id": {
+            "type": "string",
+            "title": "Rally Id"
+          },
+          "video_id": {
+            "type": "string",
+            "title": "Video Id"
+          },
+          "pipeline_run_id": {
+            "type": "string",
+            "title": "Pipeline Run Id"
+          },
+          "schema_version": {
+            "type": "string",
+            "title": "Schema Version"
+          },
+          "content_sha256": {
+            "type": "string",
+            "pattern": "^[a-fA-F0-9]{64}$",
+            "title": "Content Sha256"
+          },
+          "bundle": {
+            "$ref": "#/components/schemas/RallyAnalysisBundle"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "organization_id",
+          "match_id",
+          "rally_id",
+          "video_id",
+          "pipeline_run_id",
+          "schema_version",
+          "content_sha256",
+          "bundle",
+          "created_at"
+        ],
+        "title": "RallyAnalysisResultOut",
+        "description": "One immutable, completed professional analysis snapshot."
+      },
+      "RallyDurationStatsOut": {
+        "properties": {
+          "count": {
+            "type": "integer",
+            "minimum": 0,
+            "title": "Count"
+          },
+          "mean_seconds": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mean Seconds"
+          },
+          "median_seconds": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Median Seconds"
+          },
+          "min_seconds": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Seconds"
+          },
+          "max_seconds": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Seconds"
+          }
+        },
+        "type": "object",
+        "required": [
+          "count",
+          "mean_seconds",
+          "median_seconds",
+          "min_seconds",
+          "max_seconds"
+        ],
+        "title": "RallyDurationStatsOut"
+      },
+      "RallyOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "set_id": {
+            "type": "string",
+            "title": "Set Id"
+          },
+          "index_in_set": {
+            "type": "integer",
+            "title": "Index In Set"
+          },
+          "serving_team_id": {
+            "type": "string",
+            "title": "Serving Team Id"
+          },
+          "point_winner_team_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Point Winner Team Id"
+          },
+          "video_t_start": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Video T Start"
+          },
+          "video_t_end": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Video T End"
+          },
+          "duration_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Seconds"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "set_id",
+          "index_in_set",
+          "serving_team_id",
+          "point_winner_team_id",
+          "video_t_start",
+          "video_t_end",
+          "duration_seconds"
+        ],
+        "title": "RallyOut"
+      },
+      "ReceptionStatsOut": {
+        "properties": {
+          "team_id": {
+            "type": "string",
+            "title": "Team Id"
+          },
+          "total_receptions": {
+            "type": "integer",
+            "minimum": 0,
+            "title": "Total Receptions"
+          },
+          "rated_receptions": {
+            "type": "integer",
+            "minimum": 0,
+            "title": "Rated Receptions"
+          },
+          "average_rating": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Average Rating"
+          },
+          "is_effective": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Effective"
+          }
+        },
+        "type": "object",
+        "required": [
+          "team_id",
+          "total_receptions",
+          "rated_receptions",
+          "average_rating",
+          "is_effective"
+        ],
+        "title": "ReceptionStatsOut"
+      },
+      "RosterPlayer": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "jersey_number": {
+            "type": "integer",
+            "title": "Jersey Number"
+          },
+          "position": {
+            "type": "string",
+            "enum": [
+              "OH",
+              "OP",
+              "MB",
+              "S",
+              "L"
+            ],
+            "title": "Position"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "jersey_number",
+          "position"
+        ],
+        "title": "RosterPlayer"
+      },
+      "ScalarMeasurement": {
+        "properties": {
+          "value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          },
+          "unit": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Unit"
+          },
+          "measurement_mode": {
+            "type": "string",
+            "enum": [
+              "image_2d",
+              "court_plane",
+              "monocular_physics",
+              "monocular_size_prior",
+              "triangulated",
+              "manual"
+            ],
+            "title": "Measurement Mode"
+          },
+          "confidence": {
+            "type": "number",
+            "maximum": 1,
+            "minimum": 0,
+            "title": "Confidence"
+          },
+          "uncertainty": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Uncertainty"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "measured",
+              "estimated",
+              "abstained"
+            ],
+            "title": "Status"
+          },
+          "abstention_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Abstention Reason"
+          },
+          "supporting_frames": {
+            "items": {
+              "$ref": "#/components/schemas/FrameRef"
+            },
+            "type": "array",
+            "title": "Supporting Frames"
+          }
+        },
+        "type": "object",
+        "required": [
+          "unit",
+          "measurement_mode",
+          "confidence",
+          "status"
+        ],
+        "title": "ScalarMeasurement"
+      },
+      "ServeStatsOut": {
+        "properties": {
+          "team_id": {
+            "type": "string",
+            "title": "Team Id"
+          },
+          "total_serves": {
+            "type": "integer",
+            "minimum": 0,
+            "title": "Total Serves"
+          },
+          "aces": {
+            "type": "integer",
+            "minimum": 0,
+            "title": "Aces"
+          },
+          "serve_errors": {
+            "type": "integer",
+            "minimum": 0,
+            "title": "Serve Errors"
+          },
+          "zone_counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Zone Counts"
+          }
+        },
+        "type": "object",
+        "required": [
+          "team_id",
+          "total_serves",
+          "aces",
+          "serve_errors",
+          "zone_counts"
+        ],
+        "title": "ServeStatsOut"
+      },
+      "SetterDistributionEntryOut": {
+        "properties": {
+          "setter_roster_id": {
+            "type": "string",
+            "title": "Setter Roster Id"
+          },
+          "total_sets": {
+            "type": "integer",
+            "minimum": 0,
+            "title": "Total Sets"
+          },
+          "followed_by_attack": {
+            "type": "integer",
+            "minimum": 0,
+            "title": "Followed By Attack"
+          },
+          "zone_counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Zone Counts"
+          }
+        },
+        "type": "object",
+        "required": [
+          "setter_roster_id",
+          "total_sets",
+          "followed_by_attack",
+          "zone_counts"
+        ],
+        "title": "SetterDistributionEntryOut"
+      },
+      "SideoutBreakpointStatsOut": {
+        "properties": {
+          "team_id": {
+            "type": "string",
+            "title": "Team Id"
+          },
+          "serve_rallies": {
+            "type": "integer",
+            "minimum": 0,
+            "title": "Serve Rallies"
+          },
+          "serve_points_won": {
+            "type": "integer",
+            "minimum": 0,
+            "title": "Serve Points Won"
+          },
+          "breakpoint_pct": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1,
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Breakpoint Pct"
+          },
+          "reception_rallies": {
+            "type": "integer",
+            "minimum": 0,
+            "title": "Reception Rallies"
+          },
+          "reception_points_won": {
+            "type": "integer",
+            "minimum": 0,
+            "title": "Reception Points Won"
+          },
+          "sideout_pct": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1,
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sideout Pct"
+          }
+        },
+        "type": "object",
+        "required": [
+          "team_id",
+          "serve_rallies",
+          "serve_points_won",
+          "breakpoint_pct",
+          "reception_rallies",
+          "reception_points_won",
+          "sideout_pct"
+        ],
+        "title": "SideoutBreakpointStatsOut"
+      },
+      "SourceFrameRef": {
+        "properties": {
+          "source_pts": {
+            "type": "integer",
+            "title": "Source Pts"
+          },
+          "source_time_base": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]*/[1-9][0-9]*$",
+            "title": "Source Time Base"
+          },
+          "source_timestamp_seconds": {
+            "type": "number",
+            "minimum": 0,
+            "title": "Source Timestamp Seconds"
+          },
+          "normalized_timestamp_seconds": {
+            "type": "number",
+            "minimum": 0,
+            "title": "Normalized Timestamp Seconds"
+          },
+          "proxy_frame_index": {
+            "type": "integer",
+            "minimum": 0,
+            "title": "Proxy Frame Index"
+          }
+        },
+        "type": "object",
+        "required": [
+          "source_pts",
+          "source_time_base",
+          "source_timestamp_seconds",
+          "normalized_timestamp_seconds",
+          "proxy_frame_index"
+        ],
+        "title": "SourceFrameRef",
+        "description": "Exact source/proxy mapping; never identifies a frame by index alone."
+      },
+      "SpatialEstimate3D": {
+        "properties": {
+          "point": {
+            "$ref": "#/components/schemas/WorldPoint3D"
+          },
+          "measurement_mode": {
+            "type": "string",
+            "enum": [
+              "image_2d",
+              "court_plane",
+              "monocular_physics",
+              "monocular_size_prior",
+              "triangulated",
+              "manual"
+            ],
+            "title": "Measurement Mode"
+          },
+          "confidence": {
+            "type": "number",
+            "maximum": 1,
+            "minimum": 0,
+            "title": "Confidence"
+          },
+          "uncertainty": {
+            "$ref": "#/components/schemas/WorldUncertainty"
+          },
+          "reprojection_error_px": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reprojection Error Px"
+          },
+          "camera_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Camera Ids"
+          },
+          "calibration_id": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Calibration Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "point",
+          "measurement_mode",
+          "confidence",
+          "uncertainty",
+          "camera_ids",
+          "calibration_id"
+        ],
+        "title": "SpatialEstimate3D"
+      },
+      "StatCategory": {
+        "type": "string",
+        "enum": [
+          "serve_total",
+          "serve_aces",
+          "serve_errors",
+          "reception_total",
+          "attack_total",
+          "attack_kills",
+          "attack_errors",
+          "block_total",
+          "block_kills",
+          "dig_total"
+        ],
+        "title": "StatCategory"
+      },
+      "StatEvidenceEventOut": {
+        "properties": {
+          "action_id": {
+            "type": "string",
+            "title": "Action Id"
+          },
+          "rally_id": {
+            "type": "string",
+            "title": "Rally Id"
+          },
+          "set_index": {
+            "type": "integer",
+            "minimum": 0,
+            "title": "Set Index"
+          },
+          "rally_index_in_set": {
+            "type": "integer",
+            "minimum": 0,
+            "title": "Rally Index In Set"
+          },
+          "action_type": {
+            "type": "string",
+            "enum": [
+              "serve",
+              "reception",
+              "set",
+              "attack",
+              "tip",
+              "block",
+              "dig",
+              "free_ball",
+              "transition"
+            ],
+            "title": "Action Type"
+          },
+          "actor_team_id": {
+            "type": "string",
+            "title": "Actor Team Id"
+          },
+          "video_t_start": {
+            "type": "number",
+            "minimum": 0,
+            "title": "Video T Start"
+          },
+          "video_t_end": {
+            "type": "number",
+            "minimum": 0,
+            "title": "Video T End"
+          },
+          "court_x": {
+            "type": "number",
+            "maximum": 1,
+            "minimum": 0,
+            "title": "Court X"
+          },
+          "court_y": {
+            "type": "number",
+            "maximum": 1,
+            "minimum": 0,
+            "title": "Court Y"
+          },
+          "quality_rating": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quality Rating"
+          },
+          "outcome": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "continue",
+                  "point",
+                  "error"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outcome"
+          }
+        },
+        "type": "object",
+        "required": [
+          "action_id",
+          "rally_id",
+          "set_index",
+          "rally_index_in_set",
+          "action_type",
+          "actor_team_id",
+          "video_t_start",
+          "video_t_end",
+          "court_x",
+          "court_y",
+          "quality_rating",
+          "outcome"
+        ],
+        "title": "StatEvidenceEventOut"
+      },
+      "StatEvidenceOut": {
+        "properties": {
+          "formula_version": {
+            "type": "string",
+            "title": "Formula Version"
+          },
+          "category": {
+            "$ref": "#/components/schemas/StatCategory"
+          },
+          "team_id": {
+            "type": "string",
+            "title": "Team Id"
+          },
+          "zone": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "enum": [
+                  1,
+                  2,
+                  3,
+                  4,
+                  5,
+                  6
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Zone"
+          },
+          "total_events": {
+            "type": "integer",
+            "minimum": 0,
+            "title": "Total Events"
+          },
+          "returned_events": {
+            "type": "integer",
+            "minimum": 0,
+            "title": "Returned Events"
+          },
+          "is_truncated": {
+            "type": "boolean",
+            "title": "Is Truncated"
+          },
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/StatEvidenceEventOut"
+            },
+            "type": "array",
+            "title": "Events"
+          }
+        },
+        "type": "object",
+        "required": [
+          "formula_version",
+          "category",
+          "team_id",
+          "zone",
+          "total_events",
+          "returned_events",
+          "is_truncated",
+          "events"
+        ],
+        "title": "StatEvidenceOut"
+      },
+      "SyntheticAction": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "t_start": {
+            "type": "number",
+            "title": "T Start"
+          },
+          "t_end": {
+            "type": "number",
+            "title": "T End"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "serve",
+              "reception",
+              "set",
+              "attack",
+              "tip",
+              "block",
+              "dig",
+              "free_ball",
+              "transition"
+            ],
+            "title": "Type"
+          },
+          "actor_player_id": {
+            "type": "string",
+            "title": "Actor Player Id"
+          },
+          "actor_team": {
+            "type": "string",
+            "enum": [
+              "home",
+              "away"
+            ],
+            "title": "Actor Team"
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "continue",
+              "point",
+              "error"
+            ],
+            "title": "Outcome"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "confidence": {
+            "type": "number",
+            "maximum": 1,
+            "minimum": 0,
+            "title": "Confidence"
+          },
+          "court_x": {
+            "type": "number",
+            "maximum": 1,
+            "minimum": 0,
+            "title": "Court X"
+          },
+          "court_y": {
+            "type": "number",
+            "maximum": 1,
+            "minimum": 0,
+            "title": "Court Y"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "t_start",
+          "t_end",
+          "type",
+          "actor_player_id",
+          "actor_team",
+          "outcome",
+          "confidence",
+          "court_x",
+          "court_y"
+        ],
+        "title": "SyntheticAction"
+      },
+      "SyntheticMatch": {
+        "properties": {
+          "synthetic": {
+            "type": "boolean",
+            "const": true,
+            "title": "Synthetic",
+            "default": true
+          },
+          "seed": {
+            "type": "integer",
+            "title": "Seed"
+          },
+          "home_roster": {
+            "$ref": "#/components/schemas/TeamRoster"
+          },
+          "away_roster": {
+            "$ref": "#/components/schemas/TeamRoster"
+          },
+          "sets": {
+            "items": {
+              "$ref": "#/components/schemas/SyntheticSet"
+            },
+            "type": "array",
+            "title": "Sets"
+          },
+          "generated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Generated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "seed",
+          "home_roster",
+          "away_roster",
+          "sets",
+          "generated_at"
+        ],
+        "title": "SyntheticMatch"
+      },
+      "SyntheticRally": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "index_in_set": {
+            "type": "integer",
+            "title": "Index In Set"
+          },
+          "serving_team": {
+            "type": "string",
+            "enum": [
+              "home",
+              "away"
+            ],
+            "title": "Serving Team"
+          },
+          "point_winner": {
+            "type": "string",
+            "enum": [
+              "home",
+              "away"
+            ],
+            "title": "Point Winner"
+          },
+          "actions": {
+            "items": {
+              "$ref": "#/components/schemas/SyntheticAction"
+            },
+            "type": "array",
+            "title": "Actions"
+          },
+          "player_positions": {
+            "items": {
+              "$ref": "#/components/schemas/PlayerPositionSample"
+            },
+            "type": "array",
+            "title": "Player Positions"
+          },
+          "ball_positions": {
+            "items": {
+              "$ref": "#/components/schemas/BallPositionSample"
+            },
+            "type": "array",
+            "title": "Ball Positions"
+          },
+          "duration_seconds": {
+            "type": "number",
+            "title": "Duration Seconds"
+          },
+          "match_t_start": {
+            "type": "number",
+            "title": "Match T Start"
+          },
+          "match_t_end": {
+            "type": "number",
+            "title": "Match T End"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "index_in_set",
+          "serving_team",
+          "point_winner",
+          "actions",
+          "player_positions",
+          "ball_positions",
+          "duration_seconds",
+          "match_t_start",
+          "match_t_end"
+        ],
+        "title": "SyntheticRally"
+      },
+      "SyntheticSet": {
+        "properties": {
+          "index": {
+            "type": "integer",
+            "title": "Index"
+          },
+          "score": {
+            "$ref": "#/components/schemas/SyntheticSetScore"
+          },
+          "rallies": {
+            "items": {
+              "$ref": "#/components/schemas/SyntheticRally"
+            },
+            "type": "array",
+            "title": "Rallies"
+          }
+        },
+        "type": "object",
+        "required": [
+          "index",
+          "score",
+          "rallies"
+        ],
+        "title": "SyntheticSet"
+      },
+      "SyntheticSetScore": {
+        "properties": {
+          "home_points": {
+            "type": "integer",
+            "title": "Home Points"
+          },
+          "away_points": {
+            "type": "integer",
+            "title": "Away Points"
+          },
+          "winner": {
+            "type": "string",
+            "enum": [
+              "home",
+              "away"
+            ],
+            "title": "Winner"
+          }
+        },
+        "type": "object",
+        "required": [
+          "home_points",
+          "away_points",
+          "winner"
+        ],
+        "title": "SyntheticSetScore"
+      },
+      "TeamRoster": {
+        "properties": {
+          "team_name": {
+            "type": "string",
+            "title": "Team Name"
+          },
+          "players": {
+            "items": {
+              "$ref": "#/components/schemas/RosterPlayer"
+            },
+            "type": "array",
+            "title": "Players"
+          }
+        },
+        "type": "object",
+        "required": [
+          "team_name",
+          "players"
+        ],
+        "title": "TeamRoster"
+      },
+      "TriggerDetectionRequest": {
+        "properties": {
+          "max_duration_seconds": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Duration Seconds"
+          },
+          "start_offset_seconds": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Offset Seconds"
+          },
+          "sample_fps": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sample Fps"
+          }
+        },
+        "type": "object",
+        "title": "TriggerDetectionRequest",
+        "description": "Optional body for `POST /videos/{id}/detect`. `start_offset_seconds`\nskips the video's own first N seconds -- lets a caller skip real\nwarmup/pre-play footage and start analysis from the moment play\nactually begins. `max_duration_seconds` caps extraction to N seconds\n*from that starting point* -- lets a caller deliberately preview/test\nagainst a short prefix instead of committing CPU-only local inference\nto the whole remaining runtime up front. `sample_fps` overrides the\nworker's env-configured default detection rate for this one run --\nlets a caller pay for a much denser ball-motion sample on a short,\ndeliberately scoped window (paired with the two fields above) without\nredeploying the worker for every run."
+      },
+      "TriggerDetectionResponse": {
+        "properties": {
+          "pipeline_run_id": {
+            "type": "string",
+            "title": "Pipeline Run Id"
+          },
+          "status": {
+            "$ref": "#/components/schemas/PipelineRunStatusOut"
+          }
+        },
+        "type": "object",
+        "required": [
+          "pipeline_run_id",
+          "status"
+        ],
+        "title": "TriggerDetectionResponse"
+      },
+      "UploadTargetOut": {
+        "properties": {
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "method": {
+            "type": "string",
+            "const": "PUT",
+            "title": "Method"
+          },
+          "headers": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Headers"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expires At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "url",
+          "method",
+          "headers",
+          "expires_at"
+        ],
+        "title": "UploadTargetOut",
+        "description": "Shape of a signed-upload target -- mirrors what a real S3/R2\npresigned PUT looks like (url + method + headers the client must send)\nso the local-dev and production code paths present an identical\ncontract to the browser. See volley_storage.base.UploadTarget."
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      },
+      "Vector3D": {
+        "properties": {
+          "x": {
+            "type": "number",
+            "title": "X"
+          },
+          "y": {
+            "type": "number",
+            "title": "Y"
+          },
+          "z": {
+            "type": "number",
+            "title": "Z"
+          }
+        },
+        "type": "object",
+        "required": [
+          "x",
+          "y",
+          "z"
+        ],
+        "title": "Vector3D"
+      },
+      "VideoDetectionFrameOut": {
+        "properties": {
+          "frame_index": {
+            "type": "integer",
+            "title": "Frame Index"
+          },
+          "timestamp_seconds": {
+            "type": "number",
+            "title": "Timestamp Seconds"
+          },
+          "detections": {
+            "items": {
+              "$ref": "#/components/schemas/DetectionBoxOut"
+            },
+            "type": "array",
+            "title": "Detections"
+          },
+          "balls": {
+            "items": {
+              "$ref": "#/components/schemas/BallDetectionBoxOut"
+            },
+            "type": "array",
+            "title": "Balls"
+          }
+        },
+        "type": "object",
+        "required": [
+          "frame_index",
+          "timestamp_seconds",
+          "detections",
+          "balls"
+        ],
+        "title": "VideoDetectionFrameOut"
+      },
+      "VideoDetectionStatusOut": {
+        "properties": {
+          "pipeline_run_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pipeline Run Id"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PipelineRunStatusOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "model_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Version"
+          },
+          "sample_fps": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sample Fps"
+          },
+          "frames_detected": {
+            "type": "integer",
+            "title": "Frames Detected"
+          },
+          "frames_total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Frames Total"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          }
+        },
+        "type": "object",
+        "required": [
+          "pipeline_run_id",
+          "status",
+          "model_version",
+          "sample_fps",
+          "frames_detected",
+          "frames_total",
+          "error"
+        ],
+        "title": "VideoDetectionStatusOut",
+        "description": "Polled by the frontend after `POST /videos/{id}/detect`. `status` is\nNone when no detection run has ever been triggered for this video --\nthe frontend must render an honest \"not analyzed yet\" state, never a\nfabricated empty result, per CLAUDE.md's abstention principle.\n\n`frames_total` is None until the worker has finished frame extraction\n(it needs the real sampled-frame count, not an estimate) -- a client\nshowing a progress bar should treat \"status running, frames_total still\nNone\" as \"extracting frames,\" not divide by zero."
+      },
+      "VideoOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "organization_id": {
+            "type": "string",
+            "title": "Organization Id"
+          },
+          "match_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Match Id"
+          },
+          "filename": {
+            "type": "string",
+            "title": "Filename"
+          },
+          "duration_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Seconds"
+          },
+          "fps": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fps"
+          },
+          "codec": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Codec"
+          },
+          "video_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Video Hash"
+          },
+          "uploaded_by_user_id": {
+            "type": "string",
+            "title": "Uploaded By User Id"
+          },
+          "uploaded_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Uploaded At"
+          },
+          "status": {
+            "$ref": "#/components/schemas/VideoStatusOut"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "organization_id",
+          "match_id",
+          "filename",
+          "duration_seconds",
+          "fps",
+          "codec",
+          "video_hash",
+          "uploaded_by_user_id",
+          "uploaded_at",
+          "status",
+          "error"
+        ],
+        "title": "VideoOut"
+      },
+      "VideoPlaybackResponse": {
+        "properties": {
+          "video_id": {
+            "type": "string",
+            "title": "Video Id"
+          },
+          "playback": {
+            "$ref": "#/components/schemas/DownloadTargetOut"
+          }
+        },
+        "type": "object",
+        "required": [
+          "video_id",
+          "playback"
+        ],
+        "title": "VideoPlaybackResponse"
+      },
+      "VideoStatusOut": {
+        "type": "string",
+        "enum": [
+          "uploaded",
+          "validating",
+          "ready",
+          "failed"
+        ],
+        "title": "VideoStatusOut"
+      },
+      "VideoUploadRequest": {
+        "properties": {
+          "filename": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Filename"
+          },
+          "content_type": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Content Type"
+          },
+          "match_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Match Id"
+          },
+          "size_bytes": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size Bytes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "filename",
+          "content_type"
+        ],
+        "title": "VideoUploadRequest"
+      },
+      "VideoUploadResponse": {
+        "properties": {
+          "video_id": {
+            "type": "string",
+            "title": "Video Id"
+          },
+          "upload": {
+            "$ref": "#/components/schemas/UploadTargetOut"
+          }
+        },
+        "type": "object",
+        "required": [
+          "video_id",
+          "upload"
+        ],
+        "title": "VideoUploadResponse"
+      },
+      "WorldPoint3D": {
+        "properties": {
+          "x_m": {
+            "type": "number",
+            "maximum": 18,
+            "minimum": -9,
+            "title": "X M"
+          },
+          "y_m": {
+            "type": "number",
+            "maximum": 36,
+            "minimum": -18,
+            "title": "Y M"
+          },
+          "z_m": {
+            "type": "number",
+            "maximum": 30,
+            "minimum": 0,
+            "title": "Z M"
+          }
+        },
+        "type": "object",
+        "required": [
+          "x_m",
+          "y_m",
+          "z_m"
+        ],
+        "title": "WorldPoint3D",
+        "description": "Metric court coordinates.\n\nOrigin is the near-left court corner viewed from the calibrated camera:\nx runs across the 9 m court, y toward the far baseline over 18 m, and z\npoints upward. Expanded bounds allow serves and defensive play outside\nthe lines while rejecting unit/axis mistakes early."
+      },
+      "WorldUncertainty": {
+        "properties": {
+          "x_std_m": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "title": "X Std M"
+          },
+          "y_std_m": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "title": "Y Std M"
+          },
+          "z_std_m": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "title": "Z Std M"
+          }
+        },
+        "type": "object",
+        "required": [
+          "x_std_m",
+          "y_std_m",
+          "z_std_m"
+        ],
+        "title": "WorldUncertainty"
+      }
+    }
+  }
+}

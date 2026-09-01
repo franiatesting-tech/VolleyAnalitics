@@ -1,6 +1,6 @@
 import pytest
-from conftest import OTHER_ORG_PRINCIPAL
 from sqlalchemy import select
+from volley_api.core.auth import Principal
 from volley_domain.models import JobStatus, ProcessingJob
 
 
@@ -21,7 +21,21 @@ async def test_create_and_list_match(client):
 
 
 @pytest.mark.asyncio
-async def test_matches_are_isolated_by_organization(client, override_principal):
+async def test_member_can_read_but_cannot_create_matches(client, override_principal):
+    override_principal["value"] = Principal(
+        user_id="member-1", organization_id="org-1", role="member"
+    )
+    assert (await client.get("/api/v1/matches")).status_code == 200
+    response = await client.post(
+        "/api/v1/matches", json={"home_team": "Alpha VC", "away_team": "Beta VC"}
+    )
+    assert response.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_matches_are_isolated_by_organization(
+    client, override_principal, other_org_principal
+):
     create_resp = await client.post(
         "/api/v1/matches", json={"home_team": "Org1 Home", "away_team": "Org1 Away"}
     )
@@ -30,7 +44,7 @@ async def test_matches_are_isolated_by_organization(client, override_principal):
     # Switch the authenticated principal to a different organization --
     # this is the exact scenario the org-scoping rule in CLAUDE.md exists
     # to prevent a cross-tenant leak on.
-    override_principal["value"] = OTHER_ORG_PRINCIPAL
+    override_principal["value"] = other_org_principal
 
     list_resp = await client.get("/api/v1/matches")
     assert list_resp.json() == []
@@ -61,7 +75,24 @@ async def test_demo_process_trigger_is_idempotent(client):
 
 
 @pytest.mark.asyncio
-async def test_job_status_endpoint_is_org_scoped(client, override_principal, db_engine):
+async def test_member_cannot_trigger_processing(client, override_principal):
+    create_resp = await client.post(
+        "/api/v1/matches", json={"home_team": "Alpha VC", "away_team": "Beta VC"}
+    )
+    match_id = create_resp.json()["id"]
+    override_principal["value"] = Principal(
+        user_id="member-1", organization_id="org-1", role="member"
+    )
+
+    response = await client.post(f"/api/v1/matches/{match_id}/demo-process")
+
+    assert response.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_job_status_endpoint_is_org_scoped(
+    client, override_principal, other_org_principal, db_engine
+):
     create_resp = await client.post(
         "/api/v1/matches", json={"home_team": "Alpha VC", "away_team": "Beta VC"}
     )
@@ -72,7 +103,7 @@ async def test_job_status_endpoint_is_org_scoped(client, override_principal, db_
     own_org_resp = await client.get(f"/api/v1/jobs/{job_id}")
     assert own_org_resp.status_code == 200
 
-    override_principal["value"] = OTHER_ORG_PRINCIPAL
+    override_principal["value"] = other_org_principal
     other_org_resp = await client.get(f"/api/v1/jobs/{job_id}")
     assert other_org_resp.status_code == 404
 
@@ -110,3 +141,86 @@ async def test_result_endpoint_409s_before_completion_and_returns_data_after(cli
     ready = await client.get(f"/api/v1/matches/{match_id}/result")
     assert ready.status_code == 200
     assert ready.json()["home_roster"]["team_name"] == "Alpha VC"
+
+
+@pytest.mark.asyncio
+async def test_delete_match_removes_it(client):
+    create_resp = await client.post(
+        "/api/v1/matches", json={"home_team": "Alpha VC", "away_team": "Beta VC"}
+    )
+    match_id = create_resp.json()["id"]
+
+    delete_resp = await client.delete(f"/api/v1/matches/{match_id}")
+    assert delete_resp.status_code == 204
+
+    get_resp = await client.get(f"/api/v1/matches/{match_id}")
+    assert get_resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_delete_match_cascades_to_its_processing_job(client, db_engine):
+    create_resp = await client.post(
+        "/api/v1/matches", json={"home_team": "Alpha VC", "away_team": "Beta VC"}
+    )
+    match_id = create_resp.json()["id"]
+    await client.post(f"/api/v1/matches/{match_id}/demo-process")
+
+    delete_resp = await client.delete(f"/api/v1/matches/{match_id}")
+    assert delete_resp.status_code == 204
+
+    from sqlalchemy.ext.asyncio import async_sessionmaker
+
+    session_factory = async_sessionmaker(db_engine, expire_on_commit=False)
+    async with session_factory() as db:
+        remaining = (
+            (await db.execute(select(ProcessingJob).where(ProcessingJob.match_id == match_id)))
+            .scalars()
+            .all()
+        )
+        assert remaining == []
+
+
+@pytest.mark.asyncio
+async def test_delete_match_unlinks_but_does_not_delete_its_video(client, db_engine):
+    create_resp = await client.post(
+        "/api/v1/matches", json={"home_team": "Alpha VC", "away_team": "Beta VC"}
+    )
+    match_id = create_resp.json()["id"]
+    video_resp = await client.post(
+        "/api/v1/videos",
+        json={"filename": "match.mp4", "content_type": "video/mp4", "match_id": match_id},
+    )
+    video_id = video_resp.json()["video_id"]
+
+    delete_resp = await client.delete(f"/api/v1/matches/{match_id}")
+    assert delete_resp.status_code == 204
+
+    get_video_resp = await client.get(f"/api/v1/videos/{video_id}")
+    assert get_video_resp.status_code == 200
+    assert get_video_resp.json()["match_id"] is None
+
+
+@pytest.mark.asyncio
+async def test_member_cannot_delete_a_match(client, override_principal):
+    create_resp = await client.post(
+        "/api/v1/matches", json={"home_team": "Alpha VC", "away_team": "Beta VC"}
+    )
+    match_id = create_resp.json()["id"]
+
+    override_principal["value"] = Principal(
+        user_id="member-1", organization_id="org-1", role="member"
+    )
+    delete_resp = await client.delete(f"/api/v1/matches/{match_id}")
+    assert delete_resp.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_delete_match_is_org_scoped(client, override_principal, other_org_principal):
+    create_resp = await client.post(
+        "/api/v1/matches", json={"home_team": "Alpha VC", "away_team": "Beta VC"}
+    )
+    match_id = create_resp.json()["id"]
+
+    override_principal["value"] = other_org_principal
+    delete_resp = await client.delete(f"/api/v1/matches/{match_id}")
+    assert delete_resp.status_code == 404

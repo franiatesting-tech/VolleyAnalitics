@@ -8,7 +8,7 @@ TypeScript types and a typed fetch client, generated directly from `services/api
 pnpm gen:contracts
 ```
 
-Runs `services/api`'s FastAPI app through `openapi-typescript` and writes `src/schema.d.ts` (gitignored -- always regenerate, never hand-edit or commit it; see `.gitignore`). Run this whenever a route or Pydantic schema in `services/api` changes, before typechecking `apps/web`.
+Runs `services/api`'s FastAPI app through `openapi-typescript` and writes `openapi.json` plus `src/schema.d.ts`. Both generated files are committed build inputs: never hand-edit them. CI regenerates them and fails on drift, so a fresh checkout and Docker build have the exact same typed contract without relying on hidden local state. Run this whenever a route or Pydantic schema changes.
 
 ## Usage
 

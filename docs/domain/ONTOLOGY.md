@@ -24,7 +24,7 @@ Configurable (varies by club/level/analyst convention, must not be hard-coded): 
 ## Design decisions worth flagging explicitly (for architecture-lead review)
 
 1. **No generic `Prediction` table.** A fully polymorphic `Prediction(target_type, target_id, value_json, ...)` table was considered and rejected: it would require every consumer to interpret an untyped JSON blob, duplicate columns that already belong on `Action`/`BallObservation`/`PlayerObservation` (confidence, model_run_id), and adds a layer of indirection with no query benefit — nothing needs to list "all predictions of any kind" as a single homogeneous set. Per CLAUDE.md's "no abstracciones antes de que se necesiten," the typed tables satisfy the same requirement (full provenance, never destroyed, distinguishable from corrections) more simply. Revisit if a real cross-entity "list all unreviewed predictions" feature needs a unified query surface that typed tables can't serve efficiently (a UNION query across 4 tables is the first thing to try before reaching for a generic table).
-2. **`CourtPosition` is a value type, not a table.** Normalized `(x, y)` court coordinates appear on `Action`, `BallObservation`, and `PlayerObservation` as plain columns, not a foreign key to a shared `CourtPosition` row — a coordinate pair has no identity or lifecycle of its own worth tracking separately. The *court calibration* that makes those coordinates meaningful (homography, confidence, auto vs. manual) will get its own table in Phase 5 (`ml/court`) when calibration is actually implemented; it doesn't exist yet because nothing produces it yet, per "no dejar TODOs silenciosos" — this is a deliberately deferred table, not a forgotten one.
+2. **`CourtPosition` is a value type, not a table.** Normalized `(x, y)` court coordinates appear on `Action`, `BallObservation`, and `PlayerObservation` as plain columns, not a foreign key to a shared `CourtPosition` row — a coordinate pair has no identity or lifecycle of its own worth tracking separately. ~~The *court calibration* that makes those coordinates meaningful (homography, confidence, auto vs. manual) will get its own table in Phase 5 (`ml/court`) when calibration is actually implemented; it doesn't exist yet because nothing produces it yet, per "no dejar TODOs silenciosos" — this is a deliberately deferred table, not a forgotten one.~~ **Added 2026-08-31** (migration `0006`, in direct response to an external annotation-spec review naming this exact gap): `CameraSegment` + `CourtCalibration`, see "Camera & court calibration" below. The keypoints used to compute a calibration are themselves kept as a JSON value on the `CourtCalibration` row, not a separate table — same "value type, not a table" reasoning, since they're only ever read/written together with the calibration they produced.
 3. **`Organization` is not our table.** Better Auth owns it (ADR-001/ADR-002). Every org-scoped entity below (`Team`, `Competition`, `Season`, `Video`, ...) stores a plain `organization_id` string column, exactly like `Match` already does — no FK, per CLAUDE.md's auth-ownership rule.
 4. **`ProcessingJob` (Phase 1) and `PipelineRun`/`ModelRun` (this ontology) are different, deliberately.** `ProcessingJob` is job-progress-for-a-UI (status/progress/stage, polled by the frontend). `PipelineRun`/`ModelRun` are the domain-level *record of what actually ran* (model version, weights hash, dataset version — the provenance fields CLAUDE.md requires on every prediction). A `ProcessingJob` can reference the `PipelineRun` it's tracking progress for (nullable FK, added now for forward compatibility even though Phase 2's synthetic generator is the only thing populating it so far).
 
@@ -52,13 +52,19 @@ Configurable (varies by club/level/analyst convention, must not be hard-coded): 
 - **Phase** — a possession segment within a `Rally` (e.g. "reception," "transition 1") — groups `Action`s by which team currently has the ball, per ADR-001's `video → set → rally → phase → action → outcome` hierarchy. `PhaseType.RECEPTION` corresponds to what analysts formally call **Complex I** (serve-receive → attack); `PhaseType.TRANSITION` corresponds to **Complex II** (any subsequent dig/free-ball → attack). The schema uses the plainer `RECEPTION`/`TRANSITION` labels rather than "Complex I/II" — noted here explicitly (per independent domain review) so the mapping is unambiguous to anyone with formal coaching terminology reading exported phase data, even though the schema itself doesn't use that vocabulary.
 - **Action** — a single volleyball action (serve/reception/set/attack/tip/block/dig/free_ball/transition), attributed to a `Roster` entry (nullable — attribution can fail/be unknown), with court coordinates, timing, confidence, and `model_run_id` provenance.
 - **Outcome** — 1:1 with `Action`; the result (`continue`/`point`/`error`) plus optional detail (e.g. which specific error type).
+- **BlockAttempt** (added 2026-08-31) — a blocker's tactical participation in a block *whether or not they touched the ball*, deliberately separate from `Action(action_type=block)`. FIVB-style `block_mode` (`read`/`commit`/`swing`/`unknown`), `block_role` (`solo`/`left`/`middle`/`right`/`assist`/`unknown`), `jumped`. When the blocker also touched the ball, both rows exist for the same event, linked via `BlockAttempt.action_id`. Without this table, a committed blocker who never touches the ball is unrepresentable at all — roughly half of real defensive block information. See `PROFESSIONAL_ANNOTATION_PROTOCOL.md`'s "Block participation" section.
+
+### Camera & court calibration
+
+- **CameraSegment** (added 2026-08-31) — a contiguous span of one `Video` where a single camera framing holds; a broadcast cut/pan/zoom starts a new segment, since one homography is only valid within one framing. `shot_type` (`main_wide`/`endline_wide`/`side_wide`/`closeup`/`replay`/`scoreboard`/`other`) and `tactical_usable` (`usable`/`not_usable`/`partial`) — replays/close-ups are `not_usable` so they can never silently enter real-match statistics.
+- **CourtCalibration** (added 2026-08-31) — the production-side mirror of `volley_domain.annotation.CameraCalibrationAnnotation` (the ground-truth calibration schema, deliberately kept field-compatible rather than a separate vocabulary — see that class's own docstring). `image_width`/`image_height`, one homography (3x3 matrix, JSON), the named keypoints used to compute it (JSON — see design decision 2 above; same field names/polarity as `CourtKeypointAnnotation`), `method` (`automatic`/`manual`/`hybrid`, matching `calibration_mode` and CLAUDE.md's own Court decision wording), `confidence`, `reprojection_error_px`, and the optional Phase-B metric-3D fields (`camera_matrix`/`rotation_world_to_camera`/`translation_world_to_camera_m`/`supports_metric_3d`). A segment may accumulate more than one calibration over time; superseded rows are kept, never deleted, marked via `superseded_at` (not sorted by `created_at` — two calibrations in one transaction share an identical Postgres `now()`).
 
 ### Video & pipeline provenance
 
 - **Video** — the source video record: hash, duration, fps, codec, upload metadata. Optionally linked to a `Match`.
 - **VideoAsset** — derived artifacts (proxy, rally clips) referencing the original `Video`.
 - **PipelineRun** — one execution of the analysis pipeline against a `Video`: `pipeline_version`, `config_hash`, status, timing.
-- **ModelRun** — one stage of a `PipelineRun` (detection/tracking/pose/action_recognition/synthetic): `model_version`, `weights_hash`, `dataset_version`. Every `Action`/`Outcome`/`BallObservation`/`PlayerObservation` links to the `ModelRun` that produced it — this is the chain that answers "why does the product show me this."
+- **ModelRun** — one stage of a `PipelineRun` (ingest/court_calibration/detection/tracking/pose/ball_trajectory/contact_detection/action_recognition/biomechanics/synthetic): `model_version`, `weights_hash`, `dataset_version`. Every `Action`/`Outcome`/`BallObservation`/`PlayerObservation`/`CameraSegment`/`CourtCalibration`/`BlockAttempt` links to the `ModelRun` that produced it — this is the chain that answers "why does the product show me this." `ingest` (added Phase 4, 2026-08-30) is the odd one out: it records which ffmpeg build produced a `Video`'s `fps`/`width`/`height`/`codec`, not a trained model's output, but the same provenance shape applies (`model_version` holds the ffprobe version string, `config_hash` fingerprints the ffmpeg build's own configuration).
 
 ### Raw observations
 
@@ -116,9 +122,17 @@ erDiagram
     Action ||--|| Outcome : has
     Action }o--o| Roster : "attributed to"
     Action }o--o| ModelRun : "produced by"
+    Rally ||--o{ BlockAttempt : contains
+    BlockAttempt }o--o| Roster : "attributed to"
+    BlockAttempt }o--o| Action : "touched ball via"
+    BlockAttempt }o--o| ModelRun : "produced by"
     Video ||--o{ VideoAsset : derives
     Video ||--o{ PipelineRun : processed_by
     PipelineRun ||--o{ ModelRun : has_stages
+    Video ||--o{ CameraSegment : contains
+    CameraSegment ||--o{ CourtCalibration : "calibrated by"
+    CameraSegment }o--o| ModelRun : "produced by"
+    CourtCalibration }o--o| ModelRun : "produced by"
     Video ||--o{ BallObservation : samples
     Video ||--o{ PlayerObservation : samples
     ModelRun ||--o{ BallObservation : produces

@@ -5,12 +5,14 @@ description = "Celery worker for Volley Intelligence pipeline jobs."
 requires-python = ">=3.11,<3.12"
 dependencies = [
   "volley-domain",
+  "volley-storage",
   "celery>=5.4",
   "redis>=5.0",
   "sqlalchemy>=2.0,<3.0",
   "psycopg[binary]>=3.2",
   "pydantic-settings>=2.4",
   "structlog>=24.4",
+  "httpx>=0.27",
 ]
 
 [build-system]
@@ -22,6 +24,7 @@ packages = ["src/volley_worker"]
 
 [tool.uv.sources]
 volley-domain = { workspace = true }
+volley-storage = { workspace = true }
 
 [dependency-groups]
 dev = [

@@ -1,0 +1,142 @@
+{
+  "version": "next-level-golden-v0",
+  "created_at": "2026-08-30T13:30:00Z",
+  "purpose": "Diverse 720p50 end-court clips for court calibration, player detection and tracking prototypes",
+  "yt_dlp_version": "2026.08.19",
+  "ffmpeg_environment": "volley-intelligence-worker:latest pinned LGPL-only build",
+  "clips": [
+    {
+      "clip_id": "paris-china-france-a",
+      "source_video_id": "Nh2l4GY8JYI",
+      "source_url": "https://www.youtube.com/watch?v=Nh2l4GY8JYI",
+      "title": "China vs France - Paris 2024",
+      "teams": ["China", "France"],
+      "competition": "Paris 2024 Olympics",
+      "court_group": "paris-2024-main",
+      "segment_start_seconds": 600,
+      "duration_seconds": 60,
+      "tags": ["women", "red-white", "olympics", "near-team-china"]
+    },
+    {
+      "clip_id": "paris-china-france-b",
+      "source_video_id": "Nh2l4GY8JYI",
+      "source_url": "https://www.youtube.com/watch?v=Nh2l4GY8JYI",
+      "title": "China vs France - Paris 2024",
+      "teams": ["China", "France"],
+      "competition": "Paris 2024 Olympics",
+      "court_group": "paris-2024-main",
+      "segment_start_seconds": 2700,
+      "duration_seconds": 60,
+      "tags": ["women", "late-match", "rotation-variation"]
+    },
+    {
+      "clip_id": "paris-turkey-netherlands",
+      "source_video_id": "UOJ8_6sKnc8",
+      "source_url": "https://www.youtube.com/watch?v=UOJ8_6sKnc8",
+      "title": "Turkey vs Netherlands - Paris 2024",
+      "teams": ["Turkey", "Netherlands"],
+      "competition": "Paris 2024 Olympics",
+      "court_group": "paris-2024-main",
+      "segment_start_seconds": 1200,
+      "duration_seconds": 60,
+      "tags": ["women", "red-orange", "olympics"]
+    },
+    {
+      "clip_id": "paris-serbia-china",
+      "source_video_id": "uMNAmj77UPU",
+      "source_url": "https://www.youtube.com/watch?v=uMNAmj77UPU",
+      "title": "Serbia vs China - Paris 2024",
+      "teams": ["Serbia", "China"],
+      "competition": "Paris 2024 Olympics",
+      "court_group": "paris-2024-main",
+      "segment_start_seconds": 900,
+      "duration_seconds": 60,
+      "tags": ["women", "red-white", "olympics"]
+    },
+    {
+      "clip_id": "paris-italy-turkey",
+      "source_video_id": "8fd4Zq_4-58",
+      "source_url": "https://www.youtube.com/watch?v=8fd4Zq_4-58",
+      "title": "Italy vs Turkey - Paris 2024",
+      "teams": ["Italy", "Turkey"],
+      "competition": "Paris 2024 Olympics",
+      "court_group": "paris-2024-main",
+      "segment_start_seconds": 1200,
+      "duration_seconds": 60,
+      "tags": ["women", "blue-red", "olympics"]
+    },
+    {
+      "clip_id": "vnl-italy-poland-a",
+      "source_video_id": "e83Z_nP7-xc",
+      "source_url": "https://www.youtube.com/watch?v=e83Z_nP7-xc",
+      "title": "Italy vs Poland - VNL Finals 2024",
+      "teams": ["Italy", "Poland"],
+      "competition": "VNL Finals 2024",
+      "court_group": "vnl-finals-2024",
+      "segment_start_seconds": 900,
+      "duration_seconds": 60,
+      "tags": ["women", "vnl", "different-court", "blue-red"]
+    },
+    {
+      "clip_id": "vnl-italy-poland-b",
+      "source_video_id": "e83Z_nP7-xc",
+      "source_url": "https://www.youtube.com/watch?v=e83Z_nP7-xc",
+      "title": "Italy vs Poland - VNL Finals 2024",
+      "teams": ["Italy", "Poland"],
+      "competition": "VNL Finals 2024",
+      "court_group": "vnl-finals-2024",
+      "segment_start_seconds": 3300,
+      "duration_seconds": 60,
+      "tags": ["women", "vnl", "late-match", "rotation-variation"]
+    },
+    {
+      "clip_id": "vnl-japan-china-active",
+      "source_video_id": "pBo35TCOvHE",
+      "source_url": "https://www.youtube.com/watch?v=pBo35TCOvHE",
+      "title": "Japan vs China - VNL Finals 2024",
+      "teams": ["Japan", "China"],
+      "competition": "VNL Finals 2024",
+      "court_group": "vnl-finals-2024",
+      "segment_start_seconds": 2400,
+      "duration_seconds": 60,
+      "tags": ["women", "vnl", "different-court", "active-play", "red-white"]
+    },
+    {
+      "clip_id": "vnl-japan-china",
+      "source_video_id": "pBo35TCOvHE",
+      "source_url": "https://www.youtube.com/watch?v=pBo35TCOvHE",
+      "title": "Japan vs China - VNL Finals 2024",
+      "teams": ["Japan", "China"],
+      "competition": "VNL Finals 2024",
+      "court_group": "vnl-finals-2024",
+      "segment_start_seconds": 1500,
+      "duration_seconds": 60,
+      "sample_role": "transition_negative",
+      "tags": ["women", "vnl", "different-court", "red-white", "empty-court-negative"]
+    },
+    {
+      "clip_id": "paris-china-france-c",
+      "source_video_id": "Nh2l4GY8JYI",
+      "source_url": "https://www.youtube.com/watch?v=Nh2l4GY8JYI",
+      "title": "China vs France - Paris 2024",
+      "teams": ["China", "France"],
+      "competition": "Paris 2024 Olympics",
+      "court_group": "paris-2024-main",
+      "segment_start_seconds": 1500,
+      "duration_seconds": 60,
+      "tags": ["women", "red-white", "olympics", "dataset-expansion-2026-08-30"]
+    },
+    {
+      "clip_id": "vnl-japan-china-c",
+      "source_video_id": "pBo35TCOvHE",
+      "source_url": "https://www.youtube.com/watch?v=pBo35TCOvHE",
+      "title": "Japan vs China - VNL Finals 2024",
+      "teams": ["Japan", "China"],
+      "competition": "VNL Finals 2024",
+      "court_group": "vnl-finals-2024",
+      "segment_start_seconds": 3600,
+      "duration_seconds": 60,
+      "tags": ["women", "vnl", "red-white", "late-match", "dataset-expansion-2026-08-30"]
+    }
+  ]
+}

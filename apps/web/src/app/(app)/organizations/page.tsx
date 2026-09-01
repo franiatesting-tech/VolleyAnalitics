@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { AlertCircle, Building2, Check, Loader2, Plus } from "lucide-react";
 
 import { authClient, useListOrganizations, useActiveOrganization } from "@/lib/auth-client";
@@ -12,9 +13,11 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
+import { invalidateApiAuthToken } from "@/lib/api-client";
 
 export default function OrganizationsPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { data: organizations, isPending: listPending, refetch } = useListOrganizations();
   const { data: activeOrganization } = useActiveOrganization();
 
@@ -49,6 +52,8 @@ export default function OrganizationsPage() {
       return;
     }
 
+    invalidateApiAuthToken();
+    queryClient.clear();
     router.push("/matches");
     router.refresh();
   }
@@ -64,6 +69,8 @@ export default function OrganizationsPage() {
       return;
     }
 
+    invalidateApiAuthToken();
+    queryClient.clear();
     router.push("/matches");
     router.refresh();
   }

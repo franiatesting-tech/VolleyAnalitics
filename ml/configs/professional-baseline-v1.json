@@ -1,0 +1,101 @@
+{
+  "contract_version": "professional-baseline-v1",
+  "dataset_version": "next-level-golden-v1",
+  "split_manifest": "data/datasets/golden-v1/generated/split.json",
+  "code_commit_required": true,
+  "seeds": [42, 43, 44],
+  "stages": [
+    {
+      "name": "court_calibration",
+      "model_family": "court-keypoint-heatmap",
+      "model_variant": "ten-keypoint-v1",
+      "input_specification": "1280x720 undistorted RGB frame",
+      "pretrained_weights_license": "project-trained; no external weights selected",
+      "required_readiness": ["court_calibration_2d"],
+      "metric_gates": [
+        {"name": "reprojection_rmse", "direction": "max", "threshold": 3.0, "unit": "px"},
+        {"name": "court_point_rmse", "direction": "max", "threshold": 0.15, "unit": "m"}
+      ]
+    },
+    {
+      "name": "player_detection",
+      "model_family": "RF-DETR",
+      "model_variant": "Medium cloud baseline; Nano local smoke",
+      "input_specification": "multi-scale RGB; preserve 16:9 geometry and small far-court players",
+      "pretrained_weights_license": "Apache-2.0 core checkpoint only",
+      "required_readiness": ["player_detection_tracking_2d"],
+      "metric_gates": [
+        {"name": "map_50_95", "direction": "min", "threshold": 0.65, "unit": "ratio"},
+        {"name": "ap_50", "direction": "min", "threshold": 0.9, "unit": "ratio"},
+        {"name": "recall", "direction": "min", "threshold": 0.85, "unit": "ratio", "slice": "occluded"}
+      ]
+    },
+    {
+      "name": "player_tracking",
+      "model_family": "ByteTrack",
+      "model_variant": "volleyball-tuned-v1",
+      "input_specification": "player detections + team + court position temporal state",
+      "pretrained_weights_license": "MIT code; detector weights from project",
+      "required_readiness": ["player_detection_tracking_2d"],
+      "metric_gates": [
+        {"name": "hota", "direction": "min", "threshold": 0.7, "unit": "ratio"},
+        {"name": "idf1", "direction": "min", "threshold": 0.8, "unit": "ratio"},
+        {"name": "id_switches_per_rally", "direction": "max", "threshold": 0.5, "unit": "count"}
+      ]
+    },
+    {
+      "name": "ball_tracking_2d",
+      "model_family": "temporal-ball-heatmap",
+      "model_variant": "five-frame-50fps-v1",
+      "input_specification": "five full-resolution temporal frames + court/player priors",
+      "pretrained_weights_license": "project-trained; no external weights selected",
+      "required_readiness": ["ball_tracking_2d"],
+      "metric_gates": [
+        {"name": "visible_f1", "direction": "min", "threshold": 0.9, "unit": "ratio"},
+        {"name": "localization_rmse", "direction": "max", "threshold": 5.0, "unit": "px"},
+        {"name": "gap_recovery_recall", "direction": "min", "threshold": 0.8, "unit": "ratio", "slice": "occlusion_3_to_10_frames"}
+      ]
+    },
+    {
+      "name": "pose_2d",
+      "model_family": "RTMPose",
+      "model_variant": "L WholeBody 384x288 body+feet fine-tune",
+      "input_specification": "tracked player crops with temporal contact oversampling",
+      "pretrained_weights_license": "Apache-2.0 checkpoint; dataset terms rechecked before use",
+      "required_readiness": ["pose_biomechanics_2d"],
+      "metric_gates": [
+        {"name": "pck_0_2", "direction": "min", "threshold": 0.9, "unit": "ratio"},
+        {"name": "wrist_error", "direction": "max", "threshold": 8.0, "unit": "px", "slice": "contact_frames"},
+        {"name": "ankle_foot_error", "direction": "max", "threshold": 10.0, "unit": "px", "slice": "takeoff_landing"}
+      ]
+    },
+    {
+      "name": "contact_and_action",
+      "model_family": "PoseC3D plus ball/court temporal fusion",
+      "model_variant": "contact-centred-v1",
+      "input_specification": "pose, ball velocity, proximity, team possession and rule state",
+      "pretrained_weights_license": "Apache-2.0 code/checkpoint subject to dataset verification",
+      "required_readiness": ["contact_attribution", "pose_biomechanics_2d", "ball_tracking_2d"],
+      "metric_gates": [
+        {"name": "contact_f1_plus_minus_1_frame", "direction": "min", "threshold": 0.9, "unit": "ratio"},
+        {"name": "actor_accuracy", "direction": "min", "threshold": 0.95, "unit": "ratio"},
+        {"name": "action_macro_f1", "direction": "min", "threshold": 0.85, "unit": "ratio"}
+      ]
+    },
+    {
+      "name": "ball_and_pose_3d_reference",
+      "enabled": false,
+      "model_family": "calibrated multi-view triangulation",
+      "model_variant": "two-or-more-synchronized-cameras-v1",
+      "input_specification": "synchronized 2D ball/pose tracks and full camera models",
+      "pretrained_weights_license": "not applicable",
+      "required_readiness": ["metric_3d_reference"],
+      "metric_gates": [
+        {"name": "ball_position_rmse", "direction": "max", "threshold": 0.15, "unit": "m"},
+        {"name": "contact_height_mae", "direction": "max", "threshold": 0.1, "unit": "m"},
+        {"name": "ball_speed_mae", "direction": "max", "threshold": 1.5, "unit": "m/s"},
+        {"name": "joint_angle_mae", "direction": "max", "threshold": 5.0, "unit": "deg"}
+      ]
+    }
+  ]
+}

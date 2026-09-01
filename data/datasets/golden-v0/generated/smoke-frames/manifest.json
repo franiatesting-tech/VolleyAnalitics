@@ -1,0 +1,38 @@
+{
+  "manifest_version": "rfdetr-nano-smoke-v1",
+  "frames": [
+    {
+      "image_path": "data/datasets/golden-v0/generated/smoke-frames/paris-italy-turkey-frame-00001500.jpg",
+      "organization_id": "dataset-research-next-level",
+      "video_id": "paris-italy-turkey",
+      "video_hash": "32eb962b7bb6171bc0b66da52d474488464ee000a1cc5e30924d3b37abef41a7",
+      "frame_index": 1500,
+      "timestamp_seconds": 30.0,
+      "image_width": 1280,
+      "image_height": 720,
+      "sample_role": "active_play"
+    },
+    {
+      "image_path": "data/datasets/golden-v0/generated/smoke-frames/vnl-japan-china-active-frame-00001500.jpg",
+      "organization_id": "dataset-research-next-level",
+      "video_id": "vnl-japan-china-active",
+      "video_hash": "62d032f854c60939daa9c4041f4b4928554307c3ca752dc6fc0298a8b1b8703d",
+      "frame_index": 1500,
+      "timestamp_seconds": 30.0,
+      "image_width": 1280,
+      "image_height": 720,
+      "sample_role": "active_play"
+    },
+    {
+      "image_path": "data/datasets/golden-v0/generated/smoke-frames/vnl-japan-china-frame-00001500.jpg",
+      "organization_id": "dataset-research-next-level",
+      "video_id": "vnl-japan-china",
+      "video_hash": "8c7d11e4aa678e2f6abe1b5535556731fca878e37176925b505f1d29b7ecf86b",
+      "frame_index": 1500,
+      "timestamp_seconds": 30.0,
+      "image_width": 1280,
+      "image_height": 720,
+      "sample_role": "transition_negative"
+    }
+  ]
+}

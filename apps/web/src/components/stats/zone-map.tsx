@@ -23,7 +23,7 @@ export function ZoneMap({
   onZoneClick,
 }: {
   team: Team;
-  zoneCounts: Partial<Record<Zone, number>>;
+  zoneCounts: Record<string, number>;
   homeLabel: string;
   awayLabel: string;
   activeZone?: Zone;
@@ -37,9 +37,9 @@ export function ZoneMap({
       zone,
       x,
       y,
-      value: zoneCounts[zone] ?? 0,
+      value: zoneCounts[String(zone)] ?? 0,
       maxValue: max,
-      label: String(zoneCounts[zone] ?? 0),
+      label: String(zoneCounts[String(zone)] ?? 0),
       active: activeZone === zone,
       onSelect: onZoneClick ? () => onZoneClick(zone) : undefined,
     };

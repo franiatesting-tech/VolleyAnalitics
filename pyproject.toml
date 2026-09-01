@@ -6,6 +6,7 @@ requires-python = ">=3.11,<3.12"
 [tool.uv.workspace]
 members = [
   "packages/domain-py",
+  "packages/storage-py",
   "services/api",
   "services/worker",
 ]

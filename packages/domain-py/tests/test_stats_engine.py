@@ -26,7 +26,16 @@ HOME, AWAY = "team-home", "team-away"
 
 
 def _action(
-    seq: int, action_type, team, outcome=None, x=0.5, y=0.5, roster=None, rally="r1", rating=None
+    seq: int,
+    action_type,
+    team,
+    outcome=None,
+    x=0.5,
+    y=0.5,
+    roster=None,
+    rally="r1",
+    rating=None,
+    detail=None,
 ):
     return ActionRecord(
         id=f"a{seq}",
@@ -39,6 +48,7 @@ def _action(
         court_x=x,
         court_y=y,
         quality_rating=rating,
+        outcome_detail=detail,
     )
 
 
@@ -167,6 +177,30 @@ def test_attack_blocked_count_requires_immediately_following_opposing_block():
 
 def test_attack_error_not_counted_as_blocked_without_a_following_block():
     actions = [_action(1, "attack", HOME, outcome="error", rally="r1")]
+    stats = compute_attack_stats(actions)
+    assert stats[HOME].blocked == 0
+
+
+def test_attack_blocked_count_trusts_explicit_outcome_detail_with_no_adjacent_block():
+    """The primary signal (Outcome.detail == "blocked") must count on its
+    own -- no adjacency required -- since a real annotator/model may label
+    an attack as blocked without a separate Action row ever being logged
+    for the block itself (e.g. a deflection off the block with no
+    dedicated block touch recorded)."""
+    actions = [_action(1, "attack", HOME, outcome="error", rally="r1", detail="blocked")]
+    stats = compute_attack_stats(actions)
+    assert stats[HOME].blocked == 1
+    assert stats[HOME].errors == 1
+
+
+def test_attack_blocked_count_ignores_adjacency_once_outcome_detail_is_explicit():
+    """An explicit non-"blocked" detail (e.g. an unforced-error label) must
+    suppress the adjacency fallback entirely, even if a block action
+    happens to follow -- explicit labeling always wins over inference."""
+    actions = [
+        _action(1, "attack", HOME, outcome="error", rally="r1", detail="unforced"),
+        _action(2, "block", AWAY, outcome="point", rally="r1"),
+    ]
     stats = compute_attack_stats(actions)
     assert stats[HOME].blocked == 0
 

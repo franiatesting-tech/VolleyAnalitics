@@ -1,0 +1,365 @@
+[
+  {
+    "candidate_id": "rfdetr-457e7e3631143c4a0572cc49",
+    "signal_type": "player_track",
+    "video_id": "vnl-japan-china-active",
+    "frame_index": 1500,
+    "priority": 49.39,
+    "reasons": [
+      "player track requires identity and box review",
+      "generic person detector did not assign an on-court role"
+    ]
+  },
+  {
+    "candidate_id": "rfdetr-a3f8b313d57e1485fdb785a4",
+    "signal_type": "player_track",
+    "video_id": "paris-italy-turkey",
+    "frame_index": 1500,
+    "priority": 49.254,
+    "reasons": [
+      "player track requires identity and box review",
+      "generic person detector did not assign an on-court role"
+    ]
+  },
+  {
+    "candidate_id": "rfdetr-016f9408f7cac128fd90bf20",
+    "signal_type": "player_track",
+    "video_id": "vnl-japan-china-active",
+    "frame_index": 1500,
+    "priority": 48.871,
+    "reasons": [
+      "player track requires identity and box review",
+      "generic person detector did not assign an on-court role"
+    ]
+  },
+  {
+    "candidate_id": "rfdetr-83f0558182a4e3ce472c0dd6",
+    "signal_type": "player_track",
+    "video_id": "vnl-japan-china",
+    "frame_index": 1500,
+    "priority": 48.714,
+    "reasons": [
+      "player track requires identity and box review",
+      "generic person detector did not assign an on-court role"
+    ]
+  },
+  {
+    "candidate_id": "rfdetr-0d35d28451786ae2bdb883af",
+    "signal_type": "player_track",
+    "video_id": "vnl-japan-china",
+    "frame_index": 1500,
+    "priority": 47.658,
+    "reasons": [
+      "player track requires identity and box review",
+      "generic person detector did not assign an on-court role"
+    ]
+  },
+  {
+    "candidate_id": "rfdetr-136a62042a2ddad97e0b3494",
+    "signal_type": "player_track",
+    "video_id": "vnl-japan-china",
+    "frame_index": 1500,
+    "priority": 47.54,
+    "reasons": [
+      "player track requires identity and box review",
+      "generic person detector did not assign an on-court role"
+    ]
+  },
+  {
+    "candidate_id": "rfdetr-9c063e3751b991144265b047",
+    "signal_type": "player_track",
+    "video_id": "vnl-japan-china-active",
+    "frame_index": 1500,
+    "priority": 47.282,
+    "reasons": [
+      "player track requires identity and box review",
+      "generic person detector did not assign an on-court role"
+    ]
+  },
+  {
+    "candidate_id": "rfdetr-d90b5cfb4ed1280a09651120",
+    "signal_type": "player_track",
+    "video_id": "paris-italy-turkey",
+    "frame_index": 1500,
+    "priority": 45.539,
+    "reasons": [
+      "player track requires identity and box review",
+      "generic person detector did not assign an on-court role"
+    ]
+  },
+  {
+    "candidate_id": "rfdetr-4e478d3dc0849ba2f073057f",
+    "signal_type": "player_track",
+    "video_id": "vnl-japan-china",
+    "frame_index": 1500,
+    "priority": 45.266,
+    "reasons": [
+      "player track requires identity and box review",
+      "generic person detector did not assign an on-court role"
+    ]
+  },
+  {
+    "candidate_id": "rfdetr-aa56e32c281815c314789f64",
+    "signal_type": "player_track",
+    "video_id": "vnl-japan-china-active",
+    "frame_index": 1500,
+    "priority": 44.959,
+    "reasons": [
+      "player track requires identity and box review",
+      "generic person detector did not assign an on-court role"
+    ]
+  },
+  {
+    "candidate_id": "rfdetr-5d75eee9df5c5821e54ed3b1",
+    "signal_type": "player_track",
+    "video_id": "vnl-japan-china",
+    "frame_index": 1500,
+    "priority": 43.353,
+    "reasons": [
+      "player track requires identity and box review",
+      "generic person detector did not assign an on-court role"
+    ]
+  },
+  {
+    "candidate_id": "rfdetr-6d40455610208197566128d6",
+    "signal_type": "player_track",
+    "video_id": "paris-italy-turkey",
+    "frame_index": 1500,
+    "priority": 43.122,
+    "reasons": [
+      "player track requires identity and box review",
+      "generic person detector did not assign an on-court role"
+    ]
+  },
+  {
+    "candidate_id": "rfdetr-adabd6f61b9e441fa7932818",
+    "signal_type": "player_track",
+    "video_id": "vnl-japan-china",
+    "frame_index": 1500,
+    "priority": 42.82,
+    "reasons": [
+      "player track requires identity and box review",
+      "generic person detector did not assign an on-court role"
+    ]
+  },
+  {
+    "candidate_id": "rfdetr-64e64d47d4c55ade26b0cca6",
+    "signal_type": "player_track",
+    "video_id": "paris-italy-turkey",
+    "frame_index": 1500,
+    "priority": 42.781,
+    "reasons": [
+      "player track requires identity and box review",
+      "generic person detector did not assign an on-court role"
+    ]
+  },
+  {
+    "candidate_id": "rfdetr-aa68ec58847e89d52592552b",
+    "signal_type": "player_track",
+    "video_id": "vnl-japan-china-active",
+    "frame_index": 1500,
+    "priority": 41.91,
+    "reasons": [
+      "player track requires identity and box review",
+      "generic person detector did not assign an on-court role"
+    ]
+  },
+  {
+    "candidate_id": "rfdetr-ebe2bdd617d5b70ac5da6675",
+    "signal_type": "player_track",
+    "video_id": "paris-italy-turkey",
+    "frame_index": 1500,
+    "priority": 40.825,
+    "reasons": [
+      "player track requires identity and box review",
+      "generic person detector did not assign an on-court role"
+    ]
+  },
+  {
+    "candidate_id": "rfdetr-3cc712ca7f6e1871568529cf",
+    "signal_type": "player_track",
+    "video_id": "paris-italy-turkey",
+    "frame_index": 1500,
+    "priority": 40.293,
+    "reasons": [
+      "player track requires identity and box review",
+      "generic person detector did not assign an on-court role"
+    ]
+  },
+  {
+    "candidate_id": "rfdetr-98b5b07e3a9920f8b6f02f6a",
+    "signal_type": "player_track",
+    "video_id": "vnl-japan-china-active",
+    "frame_index": 1500,
+    "priority": 40.013,
+    "reasons": [
+      "player track requires identity and box review",
+      "generic person detector did not assign an on-court role"
+    ]
+  },
+  {
+    "candidate_id": "rfdetr-ea4c64e8628caa8d05ddfdc4",
+    "signal_type": "player_track",
+    "video_id": "vnl-japan-china",
+    "frame_index": 1500,
+    "priority": 39.889,
+    "reasons": [
+      "player track requires identity and box review",
+      "generic person detector did not assign an on-court role"
+    ]
+  },
+  {
+    "candidate_id": "rfdetr-3703800b83766c5b73614297",
+    "signal_type": "player_track",
+    "video_id": "paris-italy-turkey",
+    "frame_index": 1500,
+    "priority": 39.212,
+    "reasons": [
+      "player track requires identity and box review",
+      "generic person detector did not assign an on-court role"
+    ]
+  },
+  {
+    "candidate_id": "rfdetr-11c86417ef76a21a775d98fd",
+    "signal_type": "player_track",
+    "video_id": "vnl-japan-china-active",
+    "frame_index": 1500,
+    "priority": 37.829,
+    "reasons": [
+      "player track requires identity and box review",
+      "generic person detector did not assign an on-court role"
+    ]
+  },
+  {
+    "candidate_id": "rfdetr-5ea254c026dbd2339f0234cd",
+    "signal_type": "player_track",
+    "video_id": "vnl-japan-china-active",
+    "frame_index": 1500,
+    "priority": 37.719,
+    "reasons": [
+      "player track requires identity and box review",
+      "generic person detector did not assign an on-court role"
+    ]
+  },
+  {
+    "candidate_id": "rfdetr-54d45c47d6495367c223df99",
+    "signal_type": "player_track",
+    "video_id": "paris-italy-turkey",
+    "frame_index": 1500,
+    "priority": 37.582,
+    "reasons": [
+      "player track requires identity and box review",
+      "generic person detector did not assign an on-court role"
+    ]
+  },
+  {
+    "candidate_id": "rfdetr-1bfd236e9b69cb25e4e9fd95",
+    "signal_type": "player_track",
+    "video_id": "paris-italy-turkey",
+    "frame_index": 1500,
+    "priority": 37.503,
+    "reasons": [
+      "player track requires identity and box review",
+      "generic person detector did not assign an on-court role"
+    ]
+  },
+  {
+    "candidate_id": "rfdetr-db70230616aa58a491d84fd2",
+    "signal_type": "player_track",
+    "video_id": "vnl-japan-china-active",
+    "frame_index": 1500,
+    "priority": 36.557,
+    "reasons": [
+      "player track requires identity and box review",
+      "generic person detector did not assign an on-court role"
+    ]
+  },
+  {
+    "candidate_id": "rfdetr-d854f7a1038ef2f9dbc63581",
+    "signal_type": "player_track",
+    "video_id": "vnl-japan-china",
+    "frame_index": 1500,
+    "priority": 36.501,
+    "reasons": [
+      "player track requires identity and box review",
+      "generic person detector did not assign an on-court role"
+    ]
+  },
+  {
+    "candidate_id": "rfdetr-10afb794a784384d5febc394",
+    "signal_type": "player_track",
+    "video_id": "vnl-japan-china-active",
+    "frame_index": 1500,
+    "priority": 35.877,
+    "reasons": [
+      "player track requires identity and box review",
+      "generic person detector did not assign an on-court role"
+    ]
+  },
+  {
+    "candidate_id": "rfdetr-97fc3419bd8a63334745a7c2",
+    "signal_type": "player_track",
+    "video_id": "paris-italy-turkey",
+    "frame_index": 1500,
+    "priority": 35.687,
+    "reasons": [
+      "player track requires identity and box review",
+      "generic person detector did not assign an on-court role"
+    ]
+  },
+  {
+    "candidate_id": "rfdetr-2f569b26a5bdbb5ea47d1c4f",
+    "signal_type": "player_track",
+    "video_id": "vnl-japan-china-active",
+    "frame_index": 1500,
+    "priority": 35.535,
+    "reasons": [
+      "player track requires identity and box review",
+      "generic person detector did not assign an on-court role"
+    ]
+  },
+  {
+    "candidate_id": "rfdetr-683b337e60857b68242cf5e8",
+    "signal_type": "player_track",
+    "video_id": "paris-italy-turkey",
+    "frame_index": 1500,
+    "priority": 35.429,
+    "reasons": [
+      "player track requires identity and box review",
+      "generic person detector did not assign an on-court role"
+    ]
+  },
+  {
+    "candidate_id": "rfdetr-5669c77ce3d0007c2569ac8d",
+    "signal_type": "player_track",
+    "video_id": "paris-italy-turkey",
+    "frame_index": 1500,
+    "priority": 34.489,
+    "reasons": [
+      "player track requires identity and box review",
+      "generic person detector did not assign an on-court role"
+    ]
+  },
+  {
+    "candidate_id": "rfdetr-e542cfdd84e87064a9c6c349",
+    "signal_type": "player_track",
+    "video_id": "paris-italy-turkey",
+    "frame_index": 1500,
+    "priority": 34.428,
+    "reasons": [
+      "player track requires identity and box review",
+      "generic person detector did not assign an on-court role"
+    ]
+  },
+  {
+    "candidate_id": "rfdetr-8b4ce2867bc5c36ad9f03bf8",
+    "signal_type": "player_track",
+    "video_id": "vnl-japan-china-active",
+    "frame_index": 1500,
+    "priority": 34.354,
+    "reasons": [
+      "player track requires identity and box review",
+      "generic person detector did not assign an on-court role"
+    ]
+  }
+]

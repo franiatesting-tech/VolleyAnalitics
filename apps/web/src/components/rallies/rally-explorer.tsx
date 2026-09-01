@@ -4,12 +4,13 @@ import { useMemo, useRef } from "react";
 import { AlertCircle } from "lucide-react";
 
 import { RallyList } from "@/components/rallies/rally-list";
+import { ProfessionalRallyReplay } from "@/components/rallies/professional-rally-replay";
 import { RallyReplay, type RallyReplayHandle } from "@/components/rallies/rally-replay";
 import { RallyTimeline } from "@/components/rallies/rally-timeline";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useRallyActions } from "@/hooks/use-match-ontology";
+import { useRallyActions, useRallyAnalysis } from "@/hooks/use-match-ontology";
 import { pairRallyWithSynthetic } from "@/lib/ontology";
 import type { MatchSetOut, RallyOut, SyntheticMatch, TeamSides } from "@/lib/ontology";
 
@@ -32,6 +33,7 @@ export function RallyExplorer({
   const selectedRally = rallies.find((r) => r.id === selectedRallyId) ?? null;
 
   const actionsQuery = useRallyActions(selectedRallyId);
+  const analysisQuery = useRallyAnalysis(selectedRallyId);
 
   const syntheticRally = useMemo(
     () => (selectedRally ? pairRallyWithSynthetic(selectedRally, sets, syntheticMatch) : undefined),
@@ -80,11 +82,33 @@ export function RallyExplorer({
               <CardHeader>
                 <CardTitle>Replay</CardTitle>
                 <CardDescription>
-                  Animated 2D reconstruction from synthetic position data.
+                  {analysisQuery.data
+                    ? "Traceable pose, ball, contact and biomechanical reconstruction."
+                    : "Animated fallback while professional video analysis is unavailable."}
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                {syntheticRally ? (
+                {analysisQuery.isPending ? (
+                  <Skeleton className="aspect-video w-full rounded-xl" />
+                ) : analysisQuery.isError ? (
+                  <Alert variant="destructive" data-testid="professional-rally-analysis-error">
+                    <AlertCircle />
+                    <AlertDescription>
+                      Professional analysis could not be loaded.{" "}
+                      <button className="underline" onClick={() => analysisQuery.refetch()}>
+                        Retry
+                      </button>
+                    </AlertDescription>
+                  </Alert>
+                ) : analysisQuery.data ? (
+                  <ProfessionalRallyReplay
+                    key={analysisQuery.data.id}
+                    ref={replayRef}
+                    analysis={analysisQuery.data}
+                    homeLabel={homeLabel}
+                    awayLabel={awayLabel}
+                  />
+                ) : syntheticRally ? (
                   <RallyReplay
                     ref={replayRef}
                     rally={syntheticRally}

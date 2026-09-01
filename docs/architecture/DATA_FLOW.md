@@ -18,6 +18,13 @@ This is what lets a rally, an event, or a correction always resolve back to an e
 3. FastAPI records the object reference + triggers a Celery job for validation/normalization.
 4. Worker computes `video_hash`, probes container/codec/PTS, optionally produces a lower-resolution proxy for inference, and persists metadata to PostgreSQL.
 
+## Playback + exploratory detection lifecycle
+
+1. Browser requests a signed *download* URL from FastAPI (`GET /videos/{id}/playback-url`, org-scoped, requires `Video.status == READY`) — the read-side mirror of the upload signed URL above, same "bytes never transit FastAPI in production" rule. Local dev's stand-in route (`GET /storage/local-download/...`) streams via a `FileResponse` that supports HTTP Range requests, so `<video>` scrubbing works the same as it will against a real R2 presigned GET.
+2. `POST /videos/{id}/detect` enqueues a Celery job that samples frames at a fixed low rate (CPU-only local inference is far slower than the source frame rate — see `ROADMAP.md`'s GPU-abstraction decision) via `ffmpeg`, and calls a small local-only inference process running RF-DETR nano (`ml/src/volley_ml/detection/server.py`) for each sampled frame. This is deliberately a *separate* process from the Celery worker container — torch/rfdetr never enter that image — reached over HTTP (`host.docker.internal` in dev).
+3. Results persist to `VideoDetectionFrame`, one row per sampled frame, with full `PipelineRun`/`ModelRun` provenance (`video_hash + pipeline_version + config_hash`, same idempotency key as every other job in this document). Detections are explicitly *exploratory* — a generic COCO-pretrained person detector, never team/role-assigned, never conflated with `PlayerObservation` (which requires calibrated court coordinates no real video has yet — see that table's docstring in `ontology.py`).
+4. The frontend overlays these boxes on the real `<video>` element, synced by timestamp — this is a detection-quality preview, not a source of statistics. No rally/action/statistic is ever derived from this pipeline; those still require the reviewed-label event engine described elsewhere in this document.
+
 ## What gets stored permanently vs. not
 
 | Artifact | Stored? | Where |

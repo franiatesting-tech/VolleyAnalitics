@@ -9,7 +9,7 @@ COPY apps/web/package.json apps/web/package.json
 COPY packages/ui/package.json packages/ui/package.json
 COPY packages/contracts/package.json packages/contracts/package.json
 
-RUN pnpm install --frozen-lockfile || pnpm install
+RUN pnpm install --frozen-lockfile
 
 # -----------------------------------------------------------------------
 FROM deps AS dev

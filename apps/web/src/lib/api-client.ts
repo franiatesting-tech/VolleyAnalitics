@@ -11,9 +11,45 @@ import { authClient } from "@/lib/auth-client";
  * and scopes the request server-side to that org id; the frontend never
  * sends an org id of its own.
  */
+let cachedToken: string | null = null;
+let cachedUntil = 0;
+let tokenRequest: Promise<string | null> | null = null;
+
+function tokenExpiry(token: string): number | null {
+  try {
+    const payload = token.split(".")[1];
+    const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
+    const decoded = JSON.parse(globalThis.atob(padded)) as { exp?: number };
+    return typeof decoded.exp === "number" ? decoded.exp * 1000 : null;
+  } catch {
+    return null;
+  }
+}
+
 async function getAuthToken(): Promise<string | null> {
-  const { data } = await authClient.token();
-  return data?.token ?? null;
+  if (cachedToken && Date.now() < cachedUntil) return cachedToken;
+  if (tokenRequest) return tokenRequest;
+
+  tokenRequest = authClient.token().then(({ data }) => {
+    cachedToken = data?.token ?? null;
+    if (!cachedToken) {
+      cachedUntil = 0;
+      return null;
+    }
+    const expiresAt = tokenExpiry(cachedToken);
+    cachedUntil = expiresAt ? Math.max(Date.now(), expiresAt - 30_000) : Date.now() + 15_000;
+    return cachedToken;
+  }).finally(() => {
+    tokenRequest = null;
+  });
+  return tokenRequest;
+}
+
+export function invalidateApiAuthToken() {
+  cachedToken = null;
+  cachedUntil = 0;
+  tokenRequest = null;
 }
 
 export const apiClient = createApiClient(

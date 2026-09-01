@@ -1,9 +1,9 @@
 "use client";
 
-import { useQueries, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 
 import { apiClient } from "@/lib/api-client";
-import { asMatchStatistics } from "@/lib/ontology";
+import type { StatInspectRequest } from "@/components/stats/statistics-dashboard";
 
 /**
  * TanStack Query hooks over the real ontology read endpoints
@@ -55,23 +55,21 @@ export function useRallyActions(rallyId: string | null) {
   });
 }
 
-/** Fetches every rally's actions in parallel -- used to build the
- * Statistic -> Events click-through index. Fine at synthetic-match scale
- * (a handful of sets, dozens of rallies); revisit if a real match's rally
- * count ever makes this expensive. */
-export function useAllRallyActions(rallyIds: string[], enabled = true) {
-  return useQueries({
-    queries: rallyIds.map((rallyId) => ({
-      queryKey: ["rally-actions", rallyId],
-      queryFn: async () => {
-        const { data, error } = await apiClient.GET("/api/v1/rallies/{rally_id}/actions", {
-          params: { path: { rally_id: rallyId } },
-        });
-        if (error) throw new Error("Failed to load rally actions");
-        return data;
-      },
-      enabled,
-    })),
+/** Latest immutable professional analysis bundle for a rally. A 404 is a
+ * normal "not analysed yet" state, not a transport failure. */
+export function useRallyAnalysis(rallyId: string | null) {
+  return useQuery({
+    queryKey: ["rally-analysis", rallyId],
+    queryFn: async () => {
+      const { data, error, response } = await apiClient.GET(
+        "/api/v1/rallies/{rally_id}/analysis",
+        { params: { path: { rally_id: rallyId! } } },
+      );
+      if (response.status === 404) return null;
+      if (error) throw new Error("Failed to load professional rally analysis");
+      return data;
+    },
+    enabled: !!rallyId,
   });
 }
 
@@ -83,9 +81,44 @@ export function useMatchStatistics(matchId: string, enabled = true) {
         params: { path: { match_id: matchId } },
       });
       if (error) throw new Error("Failed to load statistics");
-      return data ? asMatchStatistics(data) : undefined;
+      return data;
     },
     enabled,
+  });
+}
+
+export function useStatEvidence(
+  matchId: string,
+  request: StatInspectRequest | null,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: [
+      "stat-evidence",
+      matchId,
+      request?.category,
+      request?.teamId,
+      request?.zone ?? null,
+    ],
+    queryFn: async () => {
+      const { data, error } = await apiClient.GET(
+        "/api/v1/matches/{match_id}/statistics/evidence",
+        {
+          params: {
+            path: { match_id: matchId },
+            query: {
+              category: request!.category,
+              team_id: request!.teamId,
+              ...(request!.zone === undefined ? {} : { zone: request!.zone }),
+              limit: 500,
+            },
+          },
+        },
+      );
+      if (error) throw new Error("Failed to load statistic evidence");
+      return data;
+    },
+    enabled: enabled && request !== null,
   });
 }
 

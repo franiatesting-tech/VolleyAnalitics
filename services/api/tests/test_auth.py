@@ -28,6 +28,12 @@ def test_principal_from_payload_defaults_role_to_member():
     assert principal.role == "member"
 
 
+def test_principal_from_payload_rejects_unknown_role():
+    with pytest.raises(HTTPException) as exc_info:
+        _principal_from_payload({"sub": "user-123", "org_id": "org-456", "org_role": "super-admin"})
+    assert exc_info.value.status_code == 403
+
+
 def test_principal_from_payload_rejects_missing_org_id():
     """No active organization on the session -> 403, not a silent default.
     Every API operation is organization-scoped; there is no 'no org' mode."""
@@ -106,6 +112,65 @@ def test_dev_auth_bypass_is_allowed_in_development_and_test_env():
             AUTH_AUDIENCE="aud",
             ENV=env,
             DEV_AUTH_BYPASS=True,
+        )  # must not raise
+
+
+def test_local_storage_backend_cannot_reach_production():
+    """STORAGE_BACKEND=local serves signed upload URLs through this API
+    process with no per-request JWT authentication -- the signed HMAC
+    token IS the authorization, and its signing secret has a hardcoded
+    insecure default. A production deploy that forgets to configure R2
+    must crash at startup, not silently accept unauthenticated,
+    forgeable uploads -- demonstrated live by independent security
+    review (a forged token achieved an unauthenticated cross-org write
+    with no Authorization header at all). See config.py's
+    `_local_storage_cannot_reach_production`."""
+    with pytest.raises(ValidationError, match="STORAGE_BACKEND=local is not allowed"):
+        Settings(
+            DATABASE_URL="postgresql://u:p@h/d",
+            VALKEY_URL="redis://h:6379/0",
+            AUTH_JWKS_URL="http://h/jwks",
+            AUTH_ISSUER="http://h",
+            AUTH_AUDIENCE="aud",
+            ENV="production",
+            STORAGE_BACKEND="local",
+        )
+
+
+def test_local_storage_default_signing_secret_cannot_reach_production():
+    """Even with STORAGE_BACKEND explicitly set to something other than
+    "local" (e.g. a future backend), leaving the hardcoded default signing
+    secret in place outside dev/test is its own separate failure -- the
+    secret is public (checked into this codebase's git history) the
+    moment it's ever used for real. LOCAL_STORAGE_SIGNING_SECRET is passed
+    explicitly here (rather than relying on Settings' own class-level
+    default) because conftest.py sets a process-wide env-var default for
+    every other test in this file that needs a working local adapter --
+    that env var would otherwise mask the exact "default left in place"
+    scenario this test exists to catch."""
+    with pytest.raises(ValidationError, match="LOCAL_STORAGE_SIGNING_SECRET must be set"):
+        Settings(
+            DATABASE_URL="postgresql://u:p@h/d",
+            VALKEY_URL="redis://h:6379/0",
+            AUTH_JWKS_URL="http://h/jwks",
+            AUTH_ISSUER="http://h",
+            AUTH_AUDIENCE="aud",
+            ENV="production",
+            STORAGE_BACKEND="r2",
+            LOCAL_STORAGE_SIGNING_SECRET="dev-only-insecure-signing-secret",
+        )
+
+
+def test_local_storage_backend_is_allowed_in_development_and_test_env():
+    for env in ("development", "test"):
+        Settings(
+            DATABASE_URL="postgresql://u:p@h/d",
+            VALKEY_URL="redis://h:6379/0",
+            AUTH_JWKS_URL="http://h/jwks",
+            AUTH_ISSUER="http://h",
+            AUTH_AUDIENCE="aud",
+            ENV=env,
+            STORAGE_BACKEND="local",
         )  # must not raise
 
 

@@ -170,3 +170,39 @@ def test_rally_point_winner_agrees_with_its_own_final_action_outcome():
                         f"{last.actor_team!r} means the other team scored, but "
                         f"point_winner={rally.point_winner!r}"
                     )
+
+
+def test_blocked_attacks_and_block_kills_are_actually_produced():
+    """TECH_DEBT.md's now-fixed 'blocked attack heuristic never exercised' /
+    'block_kills structurally always 0' entries: before this fix, no
+    generated rally ever ended in an opposing block stuffing an attack, so
+    AttackStats.blocked and BlockStats.block_kills were 0 on every
+    synthetic match despite each formula's own unit test passing.
+    Verified directly (measured, not assumed) across 20 seeds that both
+    now actually occur, and that every occurrence is internally
+    consistent: the blocked attack is an "error" with detail "blocked" for
+    the attacking team, immediately followed by a "point" block from the
+    *other* team, and the rally's own point_winner agrees."""
+    blocked_attack_count = 0
+    block_kill_count = 0
+    for seed in range(20):
+        match = generate_synthetic_match(seed=seed)
+        for s in match.sets:
+            for rally in s.rallies:
+                for i, action in enumerate(rally.actions):
+                    if action.type == "attack" and action.detail == "blocked":
+                        blocked_attack_count += 1
+                        assert action.outcome == "error"
+                        nxt = rally.actions[i + 1]
+                        assert nxt.type == "block"
+                        assert nxt.actor_team != action.actor_team
+                        assert nxt.outcome == "point"
+                    if action.type == "block" and action.outcome == "point":
+                        block_kill_count += 1
+                        assert rally.point_winner == action.actor_team
+
+    assert blocked_attack_count > 0, "expected at least one blocked attack across 20 seeds"
+    assert block_kill_count > 0, "expected at least one block kill across 20 seeds"
+    assert blocked_attack_count == block_kill_count, (
+        "every blocked attack must pair with exactly one block kill and vice versa"
+    )

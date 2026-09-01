@@ -2,9 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   deriveTeamSides,
-  matchesStatCategory,
   pairRallyWithSynthetic,
-  type ActionOut,
   type MatchOut,
   type MatchSetOut,
   type RallyOut,
@@ -242,58 +240,5 @@ describe("pairRallyWithSynthetic", () => {
       duration_seconds: null,
     };
     expect(pairRallyWithSynthetic(rally, sets, undefined)).toBeUndefined();
-  });
-});
-
-function makeAction(overrides: Partial<ActionOut> = {}): ActionOut {
-  return {
-    id: "action-1",
-    phase_id: "phase-1",
-    rally_id: "rally-1",
-    action_type: "attack",
-    actor_team_id: "team-A",
-    actor_roster_id: null,
-    video_t_start: 0,
-    video_t_end: 1,
-    court_x: 0.5,
-    court_y: 0.5,
-    confidence: 0.9,
-    reviewed_status: "unreviewed",
-    quality_rating: null,
-    outcome: null,
-    ...overrides,
-  };
-}
-
-describe("matchesStatCategory", () => {
-  it("matches kills to attack/tip actions with a point outcome for the given team", () => {
-    const kill = makeAction({
-      action_type: "attack",
-      actor_team_id: "team-A",
-      outcome: { id: "o1", result: "point", detail: null },
-    });
-    expect(matchesStatCategory(kill, "attack_kills", "team-A")).toBe(true);
-    expect(matchesStatCategory(kill, "attack_kills", "team-B")).toBe(false);
-  });
-
-  it("includes tip actions in attack categories, not just attack", () => {
-    const tipKill = makeAction({
-      action_type: "tip",
-      actor_team_id: "team-A",
-      outcome: { id: "o1", result: "point", detail: null },
-    });
-    expect(matchesStatCategory(tipKill, "attack_kills", "team-A")).toBe(true);
-    expect(matchesStatCategory(tipKill, "attack_total", "team-A")).toBe(true);
-  });
-
-  it("does not match a continue-outcome attack against kills or errors", () => {
-    const continued = makeAction({
-      action_type: "attack",
-      actor_team_id: "team-A",
-      outcome: { id: "o1", result: "continue", detail: null },
-    });
-    expect(matchesStatCategory(continued, "attack_kills", "team-A")).toBe(false);
-    expect(matchesStatCategory(continued, "attack_errors", "team-A")).toBe(false);
-    expect(matchesStatCategory(continued, "attack_total", "team-A")).toBe(true);
   });
 });

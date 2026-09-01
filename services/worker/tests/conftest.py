@@ -3,6 +3,11 @@ import os
 os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
 os.environ.setdefault("VALKEY_URL", "redis://localhost:6379/0")
 os.environ.setdefault("ENV", "test")
+# Unit tests stub ffprobe/StorageAdapter directly rather than shelling out
+# to a real ffmpeg binary -- the D-006 license-build check is exercised for
+# real in test_ffprobe.py instead (against whatever ffmpeg the test
+# environment actually has), not at import time for every other test here.
+os.environ.setdefault("SKIP_FFMPEG_LICENSE_CHECK", "true")
 
 import pytest
 from sqlalchemy import create_engine

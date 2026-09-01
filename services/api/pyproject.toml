@@ -5,6 +5,7 @@ description = "FastAPI backend for Volley Intelligence."
 requires-python = ">=3.11,<3.12"
 dependencies = [
   "volley-domain",
+  "volley-storage",
   "fastapi>=0.115,<1.0",
   "uvicorn[standard]>=0.30",
   "pydantic-settings>=2.4",
@@ -28,6 +29,7 @@ packages = ["src/volley_api"]
 
 [tool.uv.sources]
 volley-domain = { workspace = true }
+volley-storage = { workspace = true }
 
 [dependency-groups]
 dev = [

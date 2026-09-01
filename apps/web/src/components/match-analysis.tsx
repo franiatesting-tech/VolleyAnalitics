@@ -1,10 +1,11 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, BarChart3, Film, Gauge } from "lucide-react";
 
 import { RallyExplorer } from "@/components/rallies/rally-explorer";
 import { StatEventsPanel } from "@/components/stats/stat-events-panel";
+import { StrategicOverview } from "@/components/stats/strategic-overview";
 import {
   StatisticsDashboard,
   type StatInspectRequest,
@@ -35,8 +36,11 @@ export function MatchAnalysis({ match }: { match: MatchOut }) {
 
   const setsQuery = useMatchSets(match.id);
   const ralliesQuery = useMatchRallies(match.id);
-  const statisticsQuery = useMatchStatistics(match.id);
-  const resultQuery = useMatchResult(match.id);
+  const statisticsQuery = useMatchStatistics(match.id, tab === "overview" || tab === "statistics");
+  const resultQuery = useMatchResult(
+    match.id,
+    tab === "rallies" || !match.home_team_id || !match.away_team_id,
+  );
 
   const teamSides = useMemo(
     () =>
@@ -94,14 +98,26 @@ export function MatchAnalysis({ match }: { match: MatchOut }) {
 
   return (
     <Tabs value={tab} onValueChange={setTab} data-testid="match-analysis-tabs">
-      <TabsList>
-        <TabsTrigger value="overview">Overview</TabsTrigger>
-        <TabsTrigger value="statistics">Statistics</TabsTrigger>
-        <TabsTrigger value="rallies">Rally Explorer</TabsTrigger>
+      <TabsList className="sticky top-3 z-20 border-border-strong bg-background/90 shadow-xl shadow-black/20 backdrop-blur-xl">
+        <TabsTrigger value="overview"><Gauge /> Strategy</TabsTrigger>
+        <TabsTrigger value="statistics"><BarChart3 /> Statistics</TabsTrigger>
+        <TabsTrigger value="rallies"><Film /> Rally Explorer</TabsTrigger>
       </TabsList>
 
       <TabsContent value="overview">
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <div className="flex flex-col gap-4">
+          {statisticsQuery.isPending ? (
+            <Skeleton className="h-[30rem] w-full" />
+          ) : statisticsQuery.data && teamSides ? (
+            <StrategicOverview stats={statisticsQuery.data} rallies={rallies} teamSides={teamSides} />
+          ) : statisticsQuery.isError ? (
+            <Alert variant="destructive">
+              <AlertCircle />
+              <AlertDescription>Strategic metrics could not be loaded.</AlertDescription>
+            </Alert>
+          ) : null}
+
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           <Card>
             <CardHeader>
               <CardTitle>Sets</CardTitle>
@@ -195,6 +211,7 @@ export function MatchAnalysis({ match }: { match: MatchOut }) {
               </button>
             </CardContent>
           </Card>
+          </div>
         </div>
       </TabsContent>
 
@@ -226,8 +243,7 @@ export function MatchAnalysis({ match }: { match: MatchOut }) {
             {inspecting ? (
               <StatEventsPanel
                 request={inspecting}
-                rallies={rallies}
-                sets={sets}
+                matchId={match.id}
                 onClose={() => setInspecting(null)}
                 onOpenRally={openRallyInExplorer}
               />

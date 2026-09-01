@@ -1,0 +1,58 @@
+[project]
+name = "volley-ml"
+version = "0.1.0"
+description = "Geometry, ball kinematics and biomechanics primitives for Volley Intelligence."
+requires-python = ">=3.11,<3.12"
+dependencies = [
+  "numpy==2.4.6",
+  "pydantic>=2.13,<3.0",
+  "volley-domain",
+]
+
+[project.optional-dependencies]
+inference = [
+  "rfdetr==1.9.4",
+]
+# Local-only HTTP wrapper around the `inference` extra's RF-DETR model, so
+# the Dockerized services/worker container (deliberately kept free of
+# torch/rfdetr, see docker-compose.yml) can reach real inference by calling
+# out to a process running on the host instead of vendoring the model
+# itself. See volley_ml.detection.server and TECH_DEBT.md.
+server = [
+  "fastapi>=0.115",
+  "uvicorn[standard]>=0.32",
+  "python-multipart>=0.0.9",
+]
+
+[tool.uv.sources]
+volley-domain = { path = "../packages/domain-py" }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/volley_ml"]
+
+[dependency-groups]
+dev = [
+  "pytest>=8.0",
+  "ruff>=0.12",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.ruff.lint.per-file-ignores]
+# FastAPI's File(...)/Form(...)-as-default-argument is the framework's
+# documented, correct idiom -- not the "mutable default argument" footgun
+# B008 targets. Mirrors the root pyproject.toml's identical ignore for
+# services/api/api/routes.
+"src/volley_ml/detection/server.py" = ["B008"]
