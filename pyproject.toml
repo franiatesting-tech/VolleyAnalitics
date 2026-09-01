@@ -11,6 +11,15 @@ members = [
   "services/worker",
 ]
 
+[dependency-groups]
+# ruff itself isn't a dependency of any workspace member -- CI's `uv run
+# ruff check .`/`uv run ruff format --check .` run at the workspace root,
+# so the tool has to be declared here (mirrors ml/pyproject.toml's own
+# identical dev group).
+dev = [
+  "ruff>=0.12",
+]
+
 [tool.ruff]
 target-version = "py311"
 line-length = 100
