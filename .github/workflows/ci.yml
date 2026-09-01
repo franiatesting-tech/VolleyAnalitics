@@ -230,8 +230,16 @@ jobs:
         env:
           DATABASE_URL: "postgresql://volley:volley@localhost:5432/volley"
           VALKEY_URL: "redis://localhost:6379/0"
-          AUTH_JWKS_URL: "http://localhost:3000/api/auth/jwks"
-          AUTH_ISSUER: "http://localhost:3000"
+          # 127.0.0.1, not localhost -- ubuntu-latest runners resolve
+          # "localhost" to ::1 (IPv6) first, but uvicorn's --host 0.0.0.0
+          # below only listens on IPv4, so anything in this job that talks
+          # to our own just-started API/web servers over "localhost"
+          # silently never connects (confirmed: zero incoming requests
+          # ever reached uvicorn's access log across two real CI runs).
+          # Postgres/Valkey above are unaffected -- GH Actions' `services:`
+          # containers publish ports on both stacks via Docker.
+          AUTH_JWKS_URL: "http://127.0.0.1:3000/api/auth/jwks"
+          AUTH_ISSUER: "http://127.0.0.1:3000"
           AUTH_AUDIENCE: "volley-api"
         run: uv run --project .. --package volley-api alembic upgrade head
 
@@ -241,10 +249,10 @@ jobs:
           ENV: development
           DATABASE_URL: "postgresql://volley:volley@localhost:5432/volley"
           VALKEY_URL: "redis://localhost:6379/0"
-          AUTH_JWKS_URL: "http://localhost:3000/api/auth/jwks"
-          AUTH_ISSUER: "http://localhost:3000"
+          AUTH_JWKS_URL: "http://127.0.0.1:3000/api/auth/jwks"
+          AUTH_ISSUER: "http://127.0.0.1:3000"
           AUTH_AUDIENCE: "volley-api"
-          CORS_ALLOWED_ORIGINS: "http://localhost:3000"
+          CORS_ALLOWED_ORIGINS: "http://127.0.0.1:3000"
         run: uv run --project .. --package volley-api uvicorn volley_api.main:app --host 0.0.0.0 --port 8000 &
 
       - name: Start worker
@@ -269,7 +277,7 @@ jobs:
       - name: Migrate Better Auth's schema
         working-directory: apps/web
         env:
-          BETTER_AUTH_URL: "http://localhost:3000"
+          BETTER_AUTH_URL: "http://127.0.0.1:3000"
           BETTER_AUTH_SECRET: "ci-e2e-not-a-real-secret"
           DATABASE_URL: "postgresql://volley:volley@localhost:5432/volley"
         run: pnpm auth:migrate
@@ -277,15 +285,15 @@ jobs:
       - name: Build and start web
         working-directory: apps/web
         env:
-          NEXT_PUBLIC_API_URL: "http://localhost:8000"
-          BETTER_AUTH_URL: "http://localhost:3000"
+          NEXT_PUBLIC_API_URL: "http://127.0.0.1:8000"
+          BETTER_AUTH_URL: "http://127.0.0.1:3000"
           BETTER_AUTH_SECRET: "ci-e2e-not-a-real-secret"
           DATABASE_URL: "postgresql://volley:volley@localhost:5432/volley"
           # Must match the API's AUTH_ISSUER/AUTH_AUDIENCE above exactly --
           # otherwise Better Auth mints tokens with a default `aud` (its own
           # base URL) that services/api's JWT verification rejects, and
           # every authenticated call 401s. See ADR-003.
-          AUTH_ISSUER: "http://localhost:3000"
+          AUTH_ISSUER: "http://127.0.0.1:3000"
           AUTH_AUDIENCE: "volley-api"
         run: |
           pnpm build
@@ -293,13 +301,14 @@ jobs:
 
       - name: Wait for services
         run: |
-          npx wait-on http://localhost:8000/healthz http://localhost:3000 --timeout 60000
+          npx wait-on http://127.0.0.1:8000/healthz http://127.0.0.1:3000 --timeout 60000
 
       - name: Run Playwright smoke test
         env:
           # playwright.config.ts only spawns its own `pnpm dev` webServer
           # when this is unset -- we already built+started the production
           # server above, so point Playwright at it instead of racing a
-          # second server onto the same port.
-          PLAYWRIGHT_BASE_URL: "http://localhost:3000"
+          # second server onto the same port. 127.0.0.1, not localhost --
+          # see the "Run Alembic migrations" step's comment above for why.
+          PLAYWRIGHT_BASE_URL: "http://127.0.0.1:3000"
         run: pnpm --filter web exec playwright test --grep @smoke
