@@ -300,8 +300,15 @@ jobs:
           pnpm start &
 
       - name: Wait for services
+        # http-get:, not http: -- wait-on's default `http:` prefix sends an
+        # HTTP HEAD request, and /healthz only registers GET (confirmed
+        # directly: `curl -I` against a real running instance returns 405
+        # Method Not Allowed with `allow: GET`). The API was reachable and
+        # responding the whole time in every prior CI run; wait-on just
+        # never saw a 2xx because it was never sending a request the route
+        # actually accepts.
         run: |
-          npx wait-on http://127.0.0.1:8000/healthz http://127.0.0.1:3000 --timeout 60000
+          npx wait-on http-get://127.0.0.1:8000/healthz http-get://127.0.0.1:3000 --timeout 60000
 
       - name: Run Playwright smoke test
         env:
