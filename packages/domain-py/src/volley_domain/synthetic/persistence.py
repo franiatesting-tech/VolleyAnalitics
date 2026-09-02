@@ -15,6 +15,7 @@ from datetime import date
 
 from sqlalchemy.orm import Session
 
+from volley_domain.models import Match
 from volley_domain.ontology import (
     Action,
     ModelRun,
@@ -69,6 +70,104 @@ def _phase_type_for_group(group: list[SyntheticAction], is_first_group: bool) ->
     return PhaseType.TRANSITION
 
 
+def _get_or_create_season(
+    db: Session, *, organization_id: str, name: str, start_date: date
+) -> Season:
+    """Keyed on (organization_id, name), per TECH_DEBT.md's fix
+    recommendation -- repeated demo generation must not accumulate a fresh
+    'Synthetic Demo Season' row every single call."""
+    existing = (
+        db.query(Season)
+        .filter(Season.organization_id == organization_id, Season.name == name)
+        .one_or_none()
+    )
+    if existing is not None:
+        return existing
+    season = Season(organization_id=organization_id, name=name, start_date=start_date)
+    db.add(season)
+    db.flush()
+    return season
+
+
+def _get_or_create_team(db: Session, *, organization_id: str, name: str) -> Team:
+    existing = (
+        db.query(Team)
+        .filter(Team.organization_id == organization_id, Team.name == name)
+        .one_or_none()
+    )
+    if existing is not None:
+        return existing
+    team = Team(organization_id=organization_id, name=name)
+    db.add(team)
+    db.flush()
+    return team
+
+
+def _get_or_create_player(
+    db: Session, *, organization_id: str, first_name: str, last_name: str
+) -> Player:
+    """Keyed on (organization_id, first_name, last_name) -- sound *only*
+    because this generator's player names are deterministic per team-name
+    + roster index ("{team_name} Player {i+1}"), never per seed, so the
+    same name always refers to the same synthetic person across repeated
+    demo runs. This key would be wrong for real players (two real people
+    can share a name) -- never reuse this helper outside the synthetic
+    demo path."""
+    existing = (
+        db.query(Player)
+        .filter(
+            Player.organization_id == organization_id,
+            Player.first_name == first_name,
+            Player.last_name == last_name,
+        )
+        .one_or_none()
+    )
+    if existing is not None:
+        return existing
+    player = Player(organization_id=organization_id, first_name=first_name, last_name=last_name)
+    db.add(player)
+    db.flush()
+    return player
+
+
+def _get_or_create_roster(
+    db: Session,
+    *,
+    team_id: str,
+    player_id: str,
+    season_id: str,
+    jersey_number: int,
+    position: RosterPosition,
+    is_libero: bool,
+) -> Roster:
+    """Keyed on (team_id, player_id, season_id) -- the actual membership
+    identity. `uq_roster_team_season_jersey` alone would not catch a
+    duplicate here (a re-run's freshly-randomized jersey_number for the
+    same physical player would differ from the earlier run's), so this
+    must be an application-level lookup, not something a DB constraint
+    happens to already enforce."""
+    existing = (
+        db.query(Roster)
+        .filter(
+            Roster.team_id == team_id, Roster.player_id == player_id, Roster.season_id == season_id
+        )
+        .one_or_none()
+    )
+    if existing is not None:
+        return existing
+    roster = Roster(
+        team_id=team_id,
+        player_id=player_id,
+        season_id=season_id,
+        jersey_number=jersey_number,
+        position=position,
+        is_libero=is_libero,
+    )
+    db.add(roster)
+    db.flush()
+    return roster
+
+
 def persist_synthetic_match(
     db: Session,
     *,
@@ -82,18 +181,39 @@ def persist_synthetic_match(
     than being created/linked afterward. Caller is responsible for
     `db.commit()` (this function only adds/flushes, per the same pattern as
     volley_domain.corrections)."""
-    season = Season(
+    season = _get_or_create_season(
+        db,
         organization_id=organization_id,
         name="Synthetic Demo Season",
         start_date=date(synthetic.generated_at.year, 1, 1),
     )
-    db.add(season)
-    db.flush()
 
-    home_team = Team(organization_id=organization_id, name=synthetic.home_roster.team_name)
-    away_team = Team(organization_id=organization_id, name=synthetic.away_roster.team_name)
-    db.add_all([home_team, away_team])
-    db.flush()
+    home_team = _get_or_create_team(
+        db, organization_id=organization_id, name=synthetic.home_roster.team_name
+    )
+    away_team = _get_or_create_team(
+        db, organization_id=organization_id, name=synthetic.away_roster.team_name
+    )
+
+    # Link the Match row to the Team rows we just created -- MatchOut
+    # exposes these so the frontend can resolve "home"/"away" without
+    # inferring it from the synthetic JSON blob. An earlier version never
+    # did this (only match.status was ever written to Match), so
+    # MatchOut.home_team_id/away_team_id would have shipped permanently
+    # null despite existing on the model -- caught by independent
+    # architecture review before the API field was even added.
+    #
+    # A missing Match here is a caller-contract violation, not a normal
+    # case to swallow -- this function's own docstring requires the Match
+    # to already exist (MatchSet.match_id is NOT NULL). An earlier version
+    # silently no-op'd instead of raising, which is exactly the class of
+    # "write that never happens with nothing complaining" this fix exists
+    # to close -- caught by independent re-review.
+    match = db.get(Match, match_id)
+    if match is None:
+        raise ValueError(f"persist_synthetic_match: no Match row exists for match_id={match_id!r}")
+    match.home_team_id = home_team.id
+    match.away_team_id = away_team.id
 
     team_row_by_side = {"home": home_team, "away": away_team}
     roster_row_by_player_id: dict[str, Roster] = {}
@@ -102,12 +222,11 @@ def persist_synthetic_match(
         team_row = team_row_by_side[side]
         for player in roster.players:
             first_name, last_name = _split_name(player.name)
-            player_row = Player(
-                organization_id=organization_id, first_name=first_name, last_name=last_name
+            player_row = _get_or_create_player(
+                db, organization_id=organization_id, first_name=first_name, last_name=last_name
             )
-            db.add(player_row)
-            db.flush()
-            roster_row = Roster(
+            roster_row = _get_or_create_roster(
+                db,
                 team_id=team_row.id,
                 player_id=player_row.id,
                 season_id=season.id,
@@ -115,8 +234,6 @@ def persist_synthetic_match(
                 position=RosterPosition(player.position),
                 is_libero=(player.position == "L"),
             )
-            db.add(roster_row)
-            db.flush()
             roster_row_by_player_id[player.id] = roster_row
 
     pipeline_run = PipelineRun(
@@ -202,7 +319,11 @@ def persist_synthetic_match(
                     db.add(action_row)
                     db.flush()
 
-                    outcome_row = Outcome(action_id=action_row.id, result=synthetic_action.outcome)
+                    outcome_row = Outcome(
+                        action_id=action_row.id,
+                        result=synthetic_action.outcome,
+                        detail=synthetic_action.detail,
+                    )
                     db.add(outcome_row)
 
     db.flush()

@@ -1,0 +1,685 @@
+{
+  "dataset_version": "next-level-golden-v0",
+  "generated_at": "2026-08-30T21:51:15.849867+00:00",
+  "labels": [
+    {
+      "attributes": [
+        {
+          "input_type": "select",
+          "name": "team",
+          "values": [
+            "home",
+            "away"
+          ]
+        },
+        {
+          "input_type": "select",
+          "name": "person_role",
+          "values": [
+            "on_court_player",
+            "substitute",
+            "official",
+            "staff",
+            "spectator"
+          ]
+        },
+        {
+          "input_type": "number",
+          "name": "jersey_number",
+          "values": [
+            "0",
+            "99",
+            "1"
+          ]
+        },
+        {
+          "input_type": "select",
+          "name": "position",
+          "values": [
+            "OH",
+            "OP",
+            "MB",
+            "S",
+            "L"
+          ]
+        },
+        {
+          "input_type": "checkbox",
+          "name": "truncated",
+          "values": [
+            "false"
+          ]
+        }
+      ],
+      "name": "player"
+    },
+    {
+      "attributes": [],
+      "name": "ball"
+    },
+    {
+      "attributes": [
+        {
+          "input_type": "select",
+          "name": "action_type",
+          "values": [
+            "serve",
+            "reception",
+            "set",
+            "attack",
+            "tip",
+            "block",
+            "dig",
+            "free_ball",
+            "transition"
+          ]
+        }
+      ],
+      "name": "action"
+    },
+    {
+      "attributes": [
+        {
+          "input_type": "select",
+          "name": "keypoint_name",
+          "values": [
+            "near_baseline_left",
+            "near_baseline_right",
+            "near_attack_line_left",
+            "near_attack_line_right",
+            "centerline_left",
+            "centerline_right",
+            "far_attack_line_left",
+            "far_attack_line_right",
+            "far_baseline_left",
+            "far_baseline_right"
+          ]
+        }
+      ],
+      "name": "court_keypoint"
+    },
+    {
+      "attributes": [
+        {
+          "input_type": "number",
+          "name": "set_index",
+          "values": [
+            "1",
+            "5",
+            "1"
+          ]
+        },
+        {
+          "input_type": "number",
+          "name": "rally_index",
+          "values": [
+            "1",
+            "99",
+            "1"
+          ]
+        }
+      ],
+      "name": "rally"
+    },
+    {
+      "attributes": [
+        {
+          "input_type": "select",
+          "name": "keypoint_name",
+          "values": [
+            "nose",
+            "left_eye",
+            "right_eye",
+            "left_ear",
+            "right_ear",
+            "left_shoulder",
+            "right_shoulder",
+            "left_elbow",
+            "right_elbow",
+            "left_wrist",
+            "right_wrist",
+            "left_hip",
+            "right_hip",
+            "left_knee",
+            "right_knee",
+            "left_ankle",
+            "right_ankle",
+            "left_big_toe",
+            "left_small_toe",
+            "left_heel",
+            "right_big_toe",
+            "right_small_toe",
+            "right_heel"
+          ]
+        },
+        {
+          "input_type": "text",
+          "name": "track_id",
+          "values": []
+        },
+        {
+          "input_type": "select",
+          "name": "visibility",
+          "values": [
+            "visible",
+            "occluded",
+            "uncertain"
+          ]
+        }
+      ],
+      "name": "pose_keypoint",
+      "type": "points"
+    },
+    {
+      "attributes": [
+        {
+          "input_type": "select",
+          "name": "action_type",
+          "values": [
+            "serve",
+            "reception",
+            "set",
+            "attack",
+            "tip",
+            "block",
+            "dig",
+            "free_ball"
+          ]
+        },
+        {
+          "input_type": "select",
+          "name": "contact_surface",
+          "values": [
+            "left_hand",
+            "right_hand",
+            "both_hands",
+            "forearms",
+            "head",
+            "foot",
+            "other",
+            "unknown"
+          ]
+        },
+        {
+          "input_type": "select",
+          "name": "team",
+          "values": [
+            "home",
+            "away"
+          ]
+        },
+        {
+          "input_type": "text",
+          "name": "actor_track_id",
+          "values": []
+        }
+      ],
+      "name": "ball_contact",
+      "type": "tag"
+    },
+    {
+      "attributes": [
+        {
+          "input_type": "select",
+          "name": "metric_name",
+          "values": [
+            "jump_height",
+            "contact_height",
+            "block_reach_height",
+            "approach_speed",
+            "takeoff_vertical_velocity",
+            "knee_flexion_takeoff",
+            "knee_flexion_landing",
+            "trunk_inclination",
+            "shoulder_abduction",
+            "elbow_extension",
+            "arm_swing_angular_velocity",
+            "hip_shoulder_separation",
+            "landing_asymmetry_2d"
+          ]
+        },
+        {
+          "input_type": "text",
+          "name": "track_id",
+          "values": []
+        },
+        {
+          "input_type": "select",
+          "name": "side",
+          "values": [
+            "left",
+            "right",
+            "bilateral",
+            "not_applicable"
+          ]
+        }
+      ],
+      "name": "biomechanics_phase",
+      "type": "tag"
+    }
+  ],
+  "review_policy": {
+    "all_contact_frames_require_double_review": true,
+    "all_tasks_require_review": true,
+    "ball_labels_require_frame_level_review": true,
+    "court_calibrations_require_double_review": true,
+    "minimum_double_review_fraction": 0.2,
+    "pose_at_contact_requires_double_review": true,
+    "split_is_locked_before_annotation": true
+  },
+  "rights_source_id": "youtube-next-level-volleyball",
+  "source_inventory_generated_at": "2026-08-30T13:52:13.503064+00:00",
+  "tasks": [
+    {
+      "annotation_scope": {
+        "action_spans": "serve, reception, set, attack, block and dig spans",
+        "ball_contacts": "exact frame, actor, team, action and contact surface for every touch",
+        "ball_points": "every source frame during active rallies; mark occlusion",
+        "biomechanics_phases": "approach, takeoff, contact/block and landing spans for jump actions",
+        "court_keypoints": "one complete 10-point set per static camera shot",
+        "player_tracks": "interpolated tracks; verify at least every 5 frames",
+        "pose_keypoints": "23 body/foot points at 10 fps across rallies and every frame from 10 frames before to 10 after each contact",
+        "rally_boundaries": "start/end spans for every rally"
+      },
+      "annotation_status": "pending_human_annotation",
+      "clip_id": "paris-china-france-a",
+      "competition": "Paris 2024 Olympics",
+      "court_group": "paris-2024-main",
+      "media_path": "clips/paris-china-france-a.mp4",
+      "media_sha256": "a1ddd9452198b990e5dfe9978b0e448570c83dfcb21177090953d962d715517b",
+      "review_status": "pending_independent_review",
+      "sample_role": "active_play",
+      "source_segment_end_seconds": 660.0,
+      "source_segment_start_seconds": 600.0,
+      "source_title": "China vs France - Paris 2024",
+      "source_url": "https://www.youtube.com/watch?v=Nh2l4GY8JYI",
+      "source_video_id": "Nh2l4GY8JYI",
+      "split": "train",
+      "task_name": "next-level-golden-v0--paris-china-france-a",
+      "teams": [
+        "China",
+        "France"
+      ],
+      "video": {
+        "duration_seconds": 60.02,
+        "estimated_frame_count": 3001,
+        "fps": 50.0,
+        "height": 720,
+        "width": 1280
+      }
+    },
+    {
+      "annotation_scope": {
+        "action_spans": "serve, reception, set, attack, block and dig spans",
+        "ball_contacts": "exact frame, actor, team, action and contact surface for every touch",
+        "ball_points": "every source frame during active rallies; mark occlusion",
+        "biomechanics_phases": "approach, takeoff, contact/block and landing spans for jump actions",
+        "court_keypoints": "one complete 10-point set per static camera shot",
+        "player_tracks": "interpolated tracks; verify at least every 5 frames",
+        "pose_keypoints": "23 body/foot points at 10 fps across rallies and every frame from 10 frames before to 10 after each contact",
+        "rally_boundaries": "start/end spans for every rally"
+      },
+      "annotation_status": "pending_human_annotation",
+      "clip_id": "paris-china-france-b",
+      "competition": "Paris 2024 Olympics",
+      "court_group": "paris-2024-main",
+      "media_path": "clips/paris-china-france-b.mp4",
+      "media_sha256": "a5fbf7670137c8100959c0bb453bb0c5e56e347f7b229c29dd24d765a5cdc8d6",
+      "review_status": "pending_independent_review",
+      "sample_role": "active_play",
+      "source_segment_end_seconds": 2760.0,
+      "source_segment_start_seconds": 2700.0,
+      "source_title": "China vs France - Paris 2024",
+      "source_url": "https://www.youtube.com/watch?v=Nh2l4GY8JYI",
+      "source_video_id": "Nh2l4GY8JYI",
+      "split": "train",
+      "task_name": "next-level-golden-v0--paris-china-france-b",
+      "teams": [
+        "China",
+        "France"
+      ],
+      "video": {
+        "duration_seconds": 60.04,
+        "estimated_frame_count": 3002,
+        "fps": 50.0,
+        "height": 720,
+        "width": 1280
+      }
+    },
+    {
+      "annotation_scope": {
+        "action_spans": "serve, reception, set, attack, block and dig spans",
+        "ball_contacts": "exact frame, actor, team, action and contact surface for every touch",
+        "ball_points": "every source frame during active rallies; mark occlusion",
+        "biomechanics_phases": "approach, takeoff, contact/block and landing spans for jump actions",
+        "court_keypoints": "one complete 10-point set per static camera shot",
+        "player_tracks": "interpolated tracks; verify at least every 5 frames",
+        "pose_keypoints": "23 body/foot points at 10 fps across rallies and every frame from 10 frames before to 10 after each contact",
+        "rally_boundaries": "start/end spans for every rally"
+      },
+      "annotation_status": "pending_human_annotation",
+      "clip_id": "paris-china-france-c",
+      "competition": "Paris 2024 Olympics",
+      "court_group": "paris-2024-main",
+      "media_path": "clips/paris-china-france-c.mp4",
+      "media_sha256": "a0b57543284b7146e19cc445d8038ee7109f230077a12e320d4973af4619f49a",
+      "review_status": "pending_independent_review",
+      "sample_role": "active_play",
+      "source_segment_end_seconds": 1560.0,
+      "source_segment_start_seconds": 1500.0,
+      "source_title": "China vs France - Paris 2024",
+      "source_url": "https://www.youtube.com/watch?v=Nh2l4GY8JYI",
+      "source_video_id": "Nh2l4GY8JYI",
+      "split": "train",
+      "task_name": "next-level-golden-v0--paris-china-france-c",
+      "teams": [
+        "China",
+        "France"
+      ],
+      "video": {
+        "duration_seconds": 60.04,
+        "estimated_frame_count": 3002,
+        "fps": 50.0,
+        "height": 720,
+        "width": 1280
+      }
+    },
+    {
+      "annotation_scope": {
+        "action_spans": "serve, reception, set, attack, block and dig spans",
+        "ball_contacts": "exact frame, actor, team, action and contact surface for every touch",
+        "ball_points": "every source frame during active rallies; mark occlusion",
+        "biomechanics_phases": "approach, takeoff, contact/block and landing spans for jump actions",
+        "court_keypoints": "one complete 10-point set per static camera shot",
+        "player_tracks": "interpolated tracks; verify at least every 5 frames",
+        "pose_keypoints": "23 body/foot points at 10 fps across rallies and every frame from 10 frames before to 10 after each contact",
+        "rally_boundaries": "start/end spans for every rally"
+      },
+      "annotation_status": "pending_human_annotation",
+      "clip_id": "paris-italy-turkey",
+      "competition": "Paris 2024 Olympics",
+      "court_group": "paris-2024-main",
+      "media_path": "clips/paris-italy-turkey.mp4",
+      "media_sha256": "32eb962b7bb6171bc0b66da52d474488464ee000a1cc5e30924d3b37abef41a7",
+      "review_status": "pending_independent_review",
+      "sample_role": "active_play",
+      "source_segment_end_seconds": 1260.0,
+      "source_segment_start_seconds": 1200.0,
+      "source_title": "Italy vs Turkey - Paris 2024",
+      "source_url": "https://www.youtube.com/watch?v=8fd4Zq_4-58",
+      "source_video_id": "8fd4Zq_4-58",
+      "split": "train",
+      "task_name": "next-level-golden-v0--paris-italy-turkey",
+      "teams": [
+        "Italy",
+        "Turkey"
+      ],
+      "video": {
+        "duration_seconds": 60.12,
+        "estimated_frame_count": 3006,
+        "fps": 50.0,
+        "height": 720,
+        "width": 1280
+      }
+    },
+    {
+      "annotation_scope": {
+        "action_spans": "serve, reception, set, attack, block and dig spans",
+        "ball_contacts": "exact frame, actor, team, action and contact surface for every touch",
+        "ball_points": "every source frame during active rallies; mark occlusion",
+        "biomechanics_phases": "approach, takeoff, contact/block and landing spans for jump actions",
+        "court_keypoints": "one complete 10-point set per static camera shot",
+        "player_tracks": "interpolated tracks; verify at least every 5 frames",
+        "pose_keypoints": "23 body/foot points at 10 fps across rallies and every frame from 10 frames before to 10 after each contact",
+        "rally_boundaries": "start/end spans for every rally"
+      },
+      "annotation_status": "pending_human_annotation",
+      "clip_id": "paris-serbia-china",
+      "competition": "Paris 2024 Olympics",
+      "court_group": "paris-2024-main",
+      "media_path": "clips/paris-serbia-china.mp4",
+      "media_sha256": "51aa4b44660651f719ebce48aff16fdabc173ac49873feff330342341da83fb4",
+      "review_status": "pending_independent_review",
+      "sample_role": "active_play",
+      "source_segment_end_seconds": 960.0,
+      "source_segment_start_seconds": 900.0,
+      "source_title": "Serbia vs China - Paris 2024",
+      "source_url": "https://www.youtube.com/watch?v=uMNAmj77UPU",
+      "source_video_id": "uMNAmj77UPU",
+      "split": "test",
+      "task_name": "next-level-golden-v0--paris-serbia-china",
+      "teams": [
+        "Serbia",
+        "China"
+      ],
+      "video": {
+        "duration_seconds": 60.06,
+        "estimated_frame_count": 3003,
+        "fps": 50.0,
+        "height": 720,
+        "width": 1280
+      }
+    },
+    {
+      "annotation_scope": {
+        "action_spans": "serve, reception, set, attack, block and dig spans",
+        "ball_contacts": "exact frame, actor, team, action and contact surface for every touch",
+        "ball_points": "every source frame during active rallies; mark occlusion",
+        "biomechanics_phases": "approach, takeoff, contact/block and landing spans for jump actions",
+        "court_keypoints": "one complete 10-point set per static camera shot",
+        "player_tracks": "interpolated tracks; verify at least every 5 frames",
+        "pose_keypoints": "23 body/foot points at 10 fps across rallies and every frame from 10 frames before to 10 after each contact",
+        "rally_boundaries": "start/end spans for every rally"
+      },
+      "annotation_status": "pending_human_annotation",
+      "clip_id": "paris-turkey-netherlands",
+      "competition": "Paris 2024 Olympics",
+      "court_group": "paris-2024-main",
+      "media_path": "clips/paris-turkey-netherlands.mp4",
+      "media_sha256": "49b309df1c8020674d9a3ef6752d0cd4c8f04da7123d9ed57357ac8f0ab55d34",
+      "review_status": "pending_independent_review",
+      "sample_role": "active_play",
+      "source_segment_end_seconds": 1260.0,
+      "source_segment_start_seconds": 1200.0,
+      "source_title": "Turkey vs Netherlands - Paris 2024",
+      "source_url": "https://www.youtube.com/watch?v=UOJ8_6sKnc8",
+      "source_video_id": "UOJ8_6sKnc8",
+      "split": "train",
+      "task_name": "next-level-golden-v0--paris-turkey-netherlands",
+      "teams": [
+        "Turkey",
+        "Netherlands"
+      ],
+      "video": {
+        "duration_seconds": 60.12,
+        "estimated_frame_count": 3006,
+        "fps": 50.0,
+        "height": 720,
+        "width": 1280
+      }
+    },
+    {
+      "annotation_scope": {
+        "action_spans": "serve, reception, set, attack, block and dig spans",
+        "ball_contacts": "exact frame, actor, team, action and contact surface for every touch",
+        "ball_points": "every source frame during active rallies; mark occlusion",
+        "biomechanics_phases": "approach, takeoff, contact/block and landing spans for jump actions",
+        "court_keypoints": "one complete 10-point set per static camera shot",
+        "player_tracks": "interpolated tracks; verify at least every 5 frames",
+        "pose_keypoints": "23 body/foot points at 10 fps across rallies and every frame from 10 frames before to 10 after each contact",
+        "rally_boundaries": "start/end spans for every rally"
+      },
+      "annotation_status": "pending_human_annotation",
+      "clip_id": "vnl-italy-poland-a",
+      "competition": "VNL Finals 2024",
+      "court_group": "vnl-finals-2024",
+      "media_path": "clips/vnl-italy-poland-a.mp4",
+      "media_sha256": "3eb5977e78e9dc30c9857010edfa85e9591c505d03c7168130369f231de00dfc",
+      "review_status": "pending_independent_review",
+      "sample_role": "active_play",
+      "source_segment_end_seconds": 960.0,
+      "source_segment_start_seconds": 900.0,
+      "source_title": "Italy vs Poland - VNL Finals 2024",
+      "source_url": "https://www.youtube.com/watch?v=e83Z_nP7-xc",
+      "source_video_id": "e83Z_nP7-xc",
+      "split": "val",
+      "task_name": "next-level-golden-v0--vnl-italy-poland-a",
+      "teams": [
+        "Italy",
+        "Poland"
+      ],
+      "video": {
+        "duration_seconds": 60.08,
+        "estimated_frame_count": 3004,
+        "fps": 50.0,
+        "height": 720,
+        "width": 1280
+      }
+    },
+    {
+      "annotation_scope": {
+        "action_spans": "serve, reception, set, attack, block and dig spans",
+        "ball_contacts": "exact frame, actor, team, action and contact surface for every touch",
+        "ball_points": "every source frame during active rallies; mark occlusion",
+        "biomechanics_phases": "approach, takeoff, contact/block and landing spans for jump actions",
+        "court_keypoints": "one complete 10-point set per static camera shot",
+        "player_tracks": "interpolated tracks; verify at least every 5 frames",
+        "pose_keypoints": "23 body/foot points at 10 fps across rallies and every frame from 10 frames before to 10 after each contact",
+        "rally_boundaries": "start/end spans for every rally"
+      },
+      "annotation_status": "pending_human_annotation",
+      "clip_id": "vnl-italy-poland-b",
+      "competition": "VNL Finals 2024",
+      "court_group": "vnl-finals-2024",
+      "media_path": "clips/vnl-italy-poland-b.mp4",
+      "media_sha256": "df4dc990861b169dcb3305bfaf8644c86374b388dc7523b399954c4782f4c2a8",
+      "review_status": "pending_independent_review",
+      "sample_role": "active_play",
+      "source_segment_end_seconds": 3360.0,
+      "source_segment_start_seconds": 3300.0,
+      "source_title": "Italy vs Poland - VNL Finals 2024",
+      "source_url": "https://www.youtube.com/watch?v=e83Z_nP7-xc",
+      "source_video_id": "e83Z_nP7-xc",
+      "split": "val",
+      "task_name": "next-level-golden-v0--vnl-italy-poland-b",
+      "teams": [
+        "Italy",
+        "Poland"
+      ],
+      "video": {
+        "duration_seconds": 60.08,
+        "estimated_frame_count": 3004,
+        "fps": 50.0,
+        "height": 720,
+        "width": 1280
+      }
+    },
+    {
+      "annotation_scope": {
+        "negative_review": "confirm transition/empty-court interval and remove false positives"
+      },
+      "annotation_status": "pending_human_annotation",
+      "clip_id": "vnl-japan-china",
+      "competition": "VNL Finals 2024",
+      "court_group": "vnl-finals-2024",
+      "media_path": "clips/vnl-japan-china.mp4",
+      "media_sha256": "8c7d11e4aa678e2f6abe1b5535556731fca878e37176925b505f1d29b7ecf86b",
+      "review_status": "pending_independent_review",
+      "sample_role": "transition_negative",
+      "source_segment_end_seconds": 1560.0,
+      "source_segment_start_seconds": 1500.0,
+      "source_title": "Japan vs China - VNL Finals 2024",
+      "source_url": "https://www.youtube.com/watch?v=pBo35TCOvHE",
+      "source_video_id": "pBo35TCOvHE",
+      "split": "train",
+      "task_name": "next-level-golden-v0--vnl-japan-china",
+      "teams": [
+        "Japan",
+        "China"
+      ],
+      "video": {
+        "duration_seconds": 60.14,
+        "estimated_frame_count": 3007,
+        "fps": 50.0,
+        "height": 720,
+        "width": 1280
+      }
+    },
+    {
+      "annotation_scope": {
+        "action_spans": "serve, reception, set, attack, block and dig spans",
+        "ball_contacts": "exact frame, actor, team, action and contact surface for every touch",
+        "ball_points": "every source frame during active rallies; mark occlusion",
+        "biomechanics_phases": "approach, takeoff, contact/block and landing spans for jump actions",
+        "court_keypoints": "one complete 10-point set per static camera shot",
+        "player_tracks": "interpolated tracks; verify at least every 5 frames",
+        "pose_keypoints": "23 body/foot points at 10 fps across rallies and every frame from 10 frames before to 10 after each contact",
+        "rally_boundaries": "start/end spans for every rally"
+      },
+      "annotation_status": "pending_human_annotation",
+      "clip_id": "vnl-japan-china-active",
+      "competition": "VNL Finals 2024",
+      "court_group": "vnl-finals-2024",
+      "media_path": "clips/vnl-japan-china-active.mp4",
+      "media_sha256": "62d032f854c60939daa9c4041f4b4928554307c3ca752dc6fc0298a8b1b8703d",
+      "review_status": "pending_independent_review",
+      "sample_role": "active_play",
+      "source_segment_end_seconds": 2460.0,
+      "source_segment_start_seconds": 2400.0,
+      "source_title": "Japan vs China - VNL Finals 2024",
+      "source_url": "https://www.youtube.com/watch?v=pBo35TCOvHE",
+      "source_video_id": "pBo35TCOvHE",
+      "split": "train",
+      "task_name": "next-level-golden-v0--vnl-japan-china-active",
+      "teams": [
+        "Japan",
+        "China"
+      ],
+      "video": {
+        "duration_seconds": 60.14,
+        "estimated_frame_count": 3007,
+        "fps": 50.0,
+        "height": 720,
+        "width": 1280
+      }
+    },
+    {
+      "annotation_scope": {
+        "action_spans": "serve, reception, set, attack, block and dig spans",
+        "ball_contacts": "exact frame, actor, team, action and contact surface for every touch",
+        "ball_points": "every source frame during active rallies; mark occlusion",
+        "biomechanics_phases": "approach, takeoff, contact/block and landing spans for jump actions",
+        "court_keypoints": "one complete 10-point set per static camera shot",
+        "player_tracks": "interpolated tracks; verify at least every 5 frames",
+        "pose_keypoints": "23 body/foot points at 10 fps across rallies and every frame from 10 frames before to 10 after each contact",
+        "rally_boundaries": "start/end spans for every rally"
+      },
+      "annotation_status": "pending_human_annotation",
+      "clip_id": "vnl-japan-china-c",
+      "competition": "VNL Finals 2024",
+      "court_group": "vnl-finals-2024",
+      "media_path": "clips/vnl-japan-china-c.mp4",
+      "media_sha256": "e2ddbeb191b8bc19cab3e9f7dba43fcdfcfa8d13a363c30dd7a201740f0a5a7d",
+      "review_status": "pending_independent_review",
+      "sample_role": "active_play",
+      "source_segment_end_seconds": 3660.0,
+      "source_segment_start_seconds": 3600.0,
+      "source_title": "Japan vs China - VNL Finals 2024",
+      "source_url": "https://www.youtube.com/watch?v=pBo35TCOvHE",
+      "source_video_id": "pBo35TCOvHE",
+      "split": "train",
+      "task_name": "next-level-golden-v0--vnl-japan-china-c",
+      "teams": [
+        "Japan",
+        "China"
+      ],
+      "video": {
+        "duration_seconds": 60.1,
+        "estimated_frame_count": 3005,
+        "fps": 50.0,
+        "height": 720,
+        "width": 1280
+      }
+    }
+  ]
+}

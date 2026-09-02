@@ -1,0 +1,104 @@
+{
+  "dataset_version": "next-level-golden-v0",
+  "performed_at": "2026-08-30T23:45:00Z",
+  "method": "Manual inspection of five/six evenly spaced frames per 60-second clip (contact sheet) plus the midpoint preview frame for ambiguous cases",
+  "accepted_clip_count": 11,
+  "active_play_count": 10,
+  "transition_negative_count": 1,
+  "clips": [
+    {
+      "clip_id": "paris-china-france-a",
+      "decision": "accepted_active_play",
+      "notes": "Stable rear-court view, full playing area visible, active sequences and clear red/white contrast."
+    },
+    {
+      "clip_id": "paris-china-france-b",
+      "decision": "accepted_active_play",
+      "notes": "Late-match sample with stable framing, active sequences and different rotations from clip A."
+    },
+    {
+      "clip_id": "paris-turkey-netherlands",
+      "decision": "accepted_active_play",
+      "notes": "Stable Paris court, active sequences and red/orange team appearance variation."
+    },
+    {
+      "clip_id": "paris-serbia-china",
+      "decision": "accepted_active_play",
+      "notes": "Replacement interval selected for higher active-play density and clear rear-court geometry."
+    },
+    {
+      "clip_id": "paris-italy-turkey",
+      "decision": "accepted_active_play",
+      "notes": "Replacement interval selected for higher active-play density and blue/red appearance variation."
+    },
+    {
+      "clip_id": "vnl-italy-poland-a",
+      "decision": "accepted_active_play",
+      "notes": "Different venue and floor treatment, stable full-court view and active sequences."
+    },
+    {
+      "clip_id": "vnl-italy-poland-b",
+      "decision": "accepted_active_play",
+      "notes": "Late-match sample from the VNL venue with rotation and temporal variation."
+    },
+    {
+      "clip_id": "vnl-japan-china-active",
+      "decision": "accepted_active_play",
+      "notes": "Active VNL sample with Japan/China appearance and a second source interval."
+    },
+    {
+      "clip_id": "vnl-japan-china",
+      "decision": "accepted_transition_negative",
+      "notes": "Deliberately retained empty-court/set-transition interval for false-positive control."
+    },
+    {
+      "clip_id": "paris-china-france-c",
+      "decision": "accepted_active_play",
+      "notes": "Dataset-expansion candidate (2026-08-30, later timestamp in the same source match). All six contact-sheet frames show genuine rally sequences, including a visible dig/save -- clearly active play throughout."
+    },
+    {
+      "clip_id": "vnl-japan-china-c",
+      "decision": "accepted_active_play",
+      "notes": "Dataset-expansion candidate (2026-08-30, later timestamp in the same source match). All six contact-sheet frames show dynamic rally action, including a visible dive -- clearly active play throughout."
+    }
+  ],
+  "rejected_intervals": [
+    {
+      "source_video_id": "uMNAmj77UPU",
+      "segment_start_seconds": 1800,
+      "reason": "celebration_or_dead_time",
+      "notes": "Low active-play density with celebration, team grouping and extended court transition."
+    },
+    {
+      "source_video_id": "8fd4Zq_4-58",
+      "segment_start_seconds": 2400,
+      "reason": "low_active_play_density",
+      "notes": "Mixed interval with an extended empty-court transition; replaced by a denser active sample."
+    },
+    {
+      "source_video_id": "UOJ8_6sKnc8",
+      "segment_start_seconds": 2100,
+      "reason": "celebration_or_dead_time",
+      "notes": "Dataset-expansion candidate (paris-turkey-netherlands-b), rejected 2026-08-30. Midpoint preview and contact sheet both show a post-point team huddle/celebration at the net, not rally action, across every sampled frame."
+    },
+    {
+      "source_video_id": "uMNAmj77UPU",
+      "segment_start_seconds": 2500,
+      "reason": "celebration_or_dead_time",
+      "notes": "Dataset-expansion candidate (paris-serbia-china-b), rejected 2026-08-30. All six contact-sheet frames show players standing/huddling near the net between points; no rally action in any sampled frame."
+    },
+    {
+      "source_video_id": "8fd4Zq_4-58",
+      "segment_start_seconds": 3000,
+      "reason": "timeout_or_stoppage",
+      "notes": "Dataset-expansion candidate (paris-italy-turkey-b), rejected 2026-08-30. Contact sheet shows a team timeout huddle with a coach/staff member entering the circle, not rally action."
+    },
+    {
+      "source_video_id": "e83Z_nP7-xc",
+      "segment_start_seconds": 2100,
+      "reason": "camera_transition_or_broadcast_cutaway",
+      "notes": "Dataset-expansion candidate (vnl-italy-poland-c), rejected 2026-08-30. First half of the contact sheet shows an on-screen video-challenge review overlay with players stopped and waiting; only the last two frames show play resuming. Mixed/low-density, excluded in favor of clips with active play throughout."
+    }
+  ],
+  "result": "accepted_for_annotation_and_unlabelled_pretraining"
+}

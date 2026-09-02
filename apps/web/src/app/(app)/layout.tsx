@@ -1,7 +1,7 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { Activity } from "lucide-react";
+import { Activity, Film, Swords } from "lucide-react";
 
 import { auth } from "@/lib/auth";
 import { OrgSwitcherBadge } from "@/components/org-switcher-badge";
@@ -20,14 +20,20 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
-      <header className="flex h-14 shrink-0 items-center justify-between border-b border-border px-6">
+      <header className="sticky top-0 z-50 flex h-16 shrink-0 items-center justify-between border-b border-border bg-background/88 px-4 backdrop-blur-xl md:px-6">
+        <div className="flex items-center gap-6">
         <Link href="/matches" className="flex items-center gap-2 text-sm font-semibold">
           <Activity className="size-4 text-accent" />
           Volley <span className="text-accent">Intelligence</span>
         </Link>
+        <nav className="hidden items-center gap-1 md:flex" aria-label="Primary navigation">
+          <Link href="/matches" className="flex items-center gap-2 rounded-md px-3 py-2 text-xs font-medium text-muted-foreground hover:bg-surface hover:text-foreground"><Swords className="size-3.5" /> Matches</Link>
+          <Link href="/videos" className="flex items-center gap-2 rounded-md px-3 py-2 text-xs font-medium text-muted-foreground hover:bg-surface hover:text-foreground"><Film className="size-3.5" /> Video ingest</Link>
+        </nav>
+        </div>
         <div className="flex items-center gap-4">
           <OrgSwitcherBadge />
-          <span className="text-sm text-muted-foreground">{session.user.email}</span>
+          <span className="hidden text-sm text-muted-foreground lg:inline">{session.user.email}</span>
           <SignOutButton />
         </div>
       </header>

@@ -5,6 +5,14 @@ description = "FastAPI backend for Volley Intelligence."
 requires-python = ">=3.11,<3.12"
 dependencies = [
   "volley-domain",
+  "volley-storage",
+  # ml/'s BASE package only (numpy/pydantic/volley-domain, see
+  # ml/pyproject.toml) -- deliberately not one of its `inference`/`server`
+  # extras, which pull in rfdetr/torch. Used only for the pure homography
+  # math in volley_ml.court.geometry, called synchronously from the
+  # court-calibration routes; no new service, no Celery task needed for
+  # sub-millisecond math on <=10 points.
+  "volley-ml",
   "fastapi>=0.115,<1.0",
   "uvicorn[standard]>=0.30",
   "pydantic-settings>=2.4",
@@ -28,6 +36,12 @@ packages = ["src/volley_api"]
 
 [tool.uv.sources]
 volley-domain = { workspace = true }
+volley-storage = { workspace = true }
+# ml/ is deliberately NOT a workspace member (see CLAUDE.md/TECH_DEBT.md --
+# its own inference/server extras must never leak into this lockfile), so
+# this is a plain path dependency, the exact mirror of how ml/pyproject.toml
+# itself already depends on volley-domain the same way.
+volley-ml = { path = "../../ml" }
 
 [dependency-groups]
 dev = [

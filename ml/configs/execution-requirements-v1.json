@@ -1,0 +1,43 @@
+{
+  "policy_version": "execution-requirements-v1",
+  "note": "Conservative scheduling gates, not vendor minimums. Re-profile with the frozen dataset and exact batch/config before paid training.",
+  "stages": [
+    {
+      "stage": "rfdetr_nano_smoke",
+      "requires_cuda": false,
+      "cpu_smoke_allowed": true,
+      "minimum_vram_gib": 0
+    },
+    {
+      "stage": "player_detection_training",
+      "requires_cuda": true,
+      "cpu_smoke_allowed": false,
+      "minimum_vram_gib": 12
+    },
+    {
+      "stage": "player_detection_training_nano",
+      "requires_cuda": true,
+      "cpu_smoke_allowed": false,
+      "minimum_vram_gib": 4,
+      "note": "ESTIMATE, not yet profiled with a real batch -- no reviewed labels exist yet to fine-tune against (see TECH_DEBT.md). RF-DETR Nano is architecturally far smaller than the Medium variant player_detection_training's 12 GiB gate assumes, so a small-batch/mixed-precision/gradient-accumulation local fine-tune plausibly fits a 4 GiB card, but this number is reasoned, not measured. Re-profile with the frozen next-level-golden-v1 dataset and the exact batch/config actually used before trusting this gate for a real run -- per this file's own top-level disclaimer."
+    },
+    {
+      "stage": "pose_2d_training",
+      "requires_cuda": true,
+      "cpu_smoke_allowed": false,
+      "minimum_vram_gib": 16
+    },
+    {
+      "stage": "contact_action_training",
+      "requires_cuda": true,
+      "cpu_smoke_allowed": false,
+      "minimum_vram_gib": 16
+    },
+    {
+      "stage": "multiview_3d_reference",
+      "requires_cuda": true,
+      "cpu_smoke_allowed": false,
+      "minimum_vram_gib": 8
+    }
+  ]
+}

@@ -1,0 +1,5 @@
+[core]
+    analytics = false
+    remote = local-dev
+['remote "local-dev"']
+    url = ../.dvc-local-remote

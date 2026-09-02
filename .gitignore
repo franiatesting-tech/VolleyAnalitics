@@ -1,7 +1,6 @@
-# --- Generated contracts (packages/contracts) -- regenerate via
-# `pnpm gen:contracts`, never hand-edit or commit these ---
-packages/contracts/openapi.json
-packages/contracts/src/schema.d.ts
+# --- Generated contracts (packages/contracts) ---
+# These are generated, committed build inputs. CI regenerates them and
+# rejects drift so Docker/fresh checkouts never depend on hidden local files.
 
 # --- Node / Next.js (apps/web) ---
 node_modules/
@@ -20,6 +19,10 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
+# Stray tmp-dir fixtures some dataset_factory tests write relative to cwd
+# instead of pytest's own tmp_path -- never intentional source, wherever
+# they land in the tree.
+.pytest-dataset*/
 
 # --- Env / secrets ---
 .env
@@ -58,3 +61,11 @@ logs/
 # --- Claude Code runtime state (session-local, never shared) ---
 .claude/scheduled_tasks.lock
 .claude/*.lock
+
+# --- DVC local-dev remote (Phase 4) -- a plain directory standing in for a
+# real S3/R2 remote until production credentials exist; never shared, never
+# committed. See docs/datasets/README.md. Also excludes local venvs
+# created by `uv sync` inside tools/* packages that sit outside the main
+# workspace. ---
+/.dvc-local-remote/
+tools/*/.venv/

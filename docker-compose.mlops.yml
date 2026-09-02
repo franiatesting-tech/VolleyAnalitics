@@ -1,0 +1,89 @@
+# Dataset-factory / MLOps tooling (Phase 4) -- deliberately a SEPARATE
+# compose file from the root docker-compose.yml (the product stack), not
+# merged into it. Rationale: these tools are dev/ML-workflow infrastructure
+# (annotation, dataset curation, experiment tracking), never a runtime
+# dependency of services/api or services/worker -- keeping them in their
+# own file means `docker compose up` (the product) never pays their
+# startup cost or port/volume footprint, and this file can be brought up
+# only by whoever is actually doing dataset/annotation work.
+#
+# Run with: docker compose -f docker-compose.mlops.yml up -d
+#
+# CVAT is deliberately NOT vendored here. Current CVAT (cvat-ai/cvat) is an
+# 18-service stack of its own (server, ui, two Redis-family stores,
+# Postgres, six separate worker queues, Traefik, OPA, ClickHouse, Vector,
+# Grafana) that CVAT's own team actively maintains as a docker-compose
+# file -- hand-vendoring a copy of that here would drift from upstream the
+# moment CVAT changes its own architecture, and duplicating an 18-service
+# definition inside this project's infra is a maintenance burden with no
+# real benefit over using CVAT's own release. See
+# docs/datasets/README.md's "CVAT setup" section for the pinned-version
+# clone-and-run instructions instead. This is a deliberate architecture
+# choice (delegate to upstream's own maintained deployment), not a gap.
+#
+# FiftyOne and MLflow ARE vendored here: both are simple enough (one
+# container each) that owning the compose definition is worth it for a
+# one-command local setup, and neither maintains its own multi-service
+# compose file the way CVAT does.
+#
+# DVC has no server component at all -- it's a CLI + a storage remote (a
+# plain directory for local dev, see docs/datasets/README.md; R2/S3 in
+# production once real credentials exist, same StorageAdapter boundary as
+# CLAUDE.md's Storage decision). Nothing to run here for it.
+name: volley-mlops
+
+services:
+  fiftyone:
+    image: voxel51/fiftyone:latest
+    # The image's own default CMD drops into an interactive IPython REPL
+    # (verified directly -- `docker run voxel51/fiftyone` with no command
+    # override hangs waiting on stdin, it does NOT auto-launch the App
+    # server the way an earlier assumption here had it). Launch the App
+    # server explicitly via FiftyOne's own CLI instead, bound to all
+    # interfaces so it's reachable from the host.
+    command: ["fiftyone", "app", "launch", "--remote", "--address", "0.0.0.0", "--port", "5151", "--wait", "-1"]
+    ports:
+      # Bound to the loopback interface only, not every interface on the
+      # host -- FiftyOne OSS has no authentication of its own, and this
+      # container mounts *every organization's* uploaded video (see the
+      # read-only local_storage mount below). Without this, anything on
+      # the same network as whoever runs `docker compose -f
+      # docker-compose.mlops.yml up` could browse all tenants' footage
+      # with no login. Caught by independent security review. The
+      # container's own listener still binds 0.0.0.0 *inside* the
+      # container (required for Docker's port-forwarding to reach it at
+      # all) -- this only restricts which host-side interface the
+      # published port is reachable from.
+      - "127.0.0.1:5151:5151"
+    environment:
+      FIFTYONE_DATABASE_DIR: /fiftyone/db
+    volumes:
+      - fiftyone_data:/fiftyone
+      # Same local-storage bucket the product's LocalFilesystemStorageAdapter
+      # writes uploaded videos into (see docker-compose.yml) -- mounted
+      # read-only so FiftyOne can reference/preview source media by path
+      # without a second copy of every video.
+      - local_storage:/data/local-storage:ro
+
+  mlflow:
+    build:
+      context: .
+      dockerfile: infra/docker/mlflow.Dockerfile
+    ports:
+      # Same loopback-only rationale as fiftyone's port above -- MLflow's
+      # tracking server has no authentication either.
+      - "127.0.0.1:5000:5000"
+    volumes:
+      - mlflow_data:/mlflow-data
+
+volumes:
+  fiftyone_data:
+  mlflow_data:
+  # External: defined (and actually created) by the product's own
+  # docker-compose.yml -- `docker compose up` must have run at least once
+  # for this volume to exist before this file's fiftyone service can mount
+  # it. If it doesn't exist yet, comment out the local_storage mount above
+  # rather than failing this whole file's `up`.
+  local_storage:
+    external: true
+    name: volley-intelligence_local_storage

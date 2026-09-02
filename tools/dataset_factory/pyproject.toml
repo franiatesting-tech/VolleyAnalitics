@@ -1,0 +1,37 @@
+[project]
+name = "volley-dataset-factory"
+version = "0.1.0"
+description = "Dataset factory tooling (Phase 4): CVAT/FiftyOne/DVC/MLflow glue, leakage-safe splitting CLI, QA scripts, dataset-card generator. Deliberately NOT a member of the root uv workspace -- see infra/docker/python.Dockerfile's exclusion of tools/ and pyproject.toml's ruff extend-exclude. This keeps FiftyOne/MLflow's heavy dependency trees out of services/api and services/worker's production images and lockfile entirely; run `uv sync` inside this directory specifically to work on dataset tooling."
+requires-python = ">=3.11,<3.12"
+dependencies = [
+  "volley-domain",
+  "mlflow>=3.15,<4.0",
+  "dvc>=3.55,<4.0",
+  "fiftyone>=1.0,<2.0",
+  "yt-dlp==2026.8.19",
+]
+
+[tool.uv.sources]
+# Path dependency, not a workspace member -- see the description above for
+# why this package deliberately sits outside `[tool.uv.workspace]` in the
+# root pyproject.toml.
+volley-domain = { path = "../../packages/domain-py" }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["dataset_factory"]
+
+[dependency-groups]
+dev = [
+  "pytest>=8.0",
+]
+
+[tool.pytest.ini_options]
+# Overrides (doesn't inherit) the root pyproject.toml's
+# `asyncio_mode = "strict"` -- this package has no async tests and doesn't
+# depend on pytest-asyncio, so inheriting that option only produced a
+# harmless-but-noisy "Unknown config option" warning on every run.
+testpaths = ["tests"]

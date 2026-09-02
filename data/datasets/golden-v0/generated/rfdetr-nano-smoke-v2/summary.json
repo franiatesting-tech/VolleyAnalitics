@@ -1,0 +1,37 @@
+{
+  "config_sha256": "45675e0354441292ba31269aa831772b08ad69bff9e25f0aa776f496096452d5",
+  "elapsed_seconds": 2.998,
+  "frames_processed": 3,
+  "ground_truth_eligible": false,
+  "model_version": "rfdetr-1.9.4-nano-coco-smoke",
+  "per_frame": [
+    {
+      "frame_index": 1500,
+      "inference_seconds": 2.293,
+      "overlay_path": "data\\datasets\\golden-v0\\generated\\rfdetr-nano-smoke-v2\\overlays\\paris-italy-turkey.jpg",
+      "person_candidates": 13,
+      "sample_role": "active_play",
+      "video_id": "paris-italy-turkey"
+    },
+    {
+      "frame_index": 1500,
+      "inference_seconds": 0.322,
+      "overlay_path": "data\\datasets\\golden-v0\\generated\\rfdetr-nano-smoke-v2\\overlays\\vnl-japan-china-active.jpg",
+      "person_candidates": 12,
+      "sample_role": "active_play",
+      "video_id": "vnl-japan-china-active"
+    },
+    {
+      "frame_index": 1500,
+      "inference_seconds": 0.313,
+      "overlay_path": "data\\datasets\\golden-v0\\generated\\rfdetr-nano-smoke-v2\\overlays\\vnl-japan-china.jpg",
+      "person_candidates": 8,
+      "sample_role": "transition_negative",
+      "video_id": "vnl-japan-china"
+    }
+  ],
+  "person_candidates": 33,
+  "quality_status": "preannotation_only_not_evaluated",
+  "threshold": 0.35,
+  "weights_sha256": "d8d6b9ee57d4d0ed2b1f305163624712a0532cb7bce0c747317984fc5457440d"
+}

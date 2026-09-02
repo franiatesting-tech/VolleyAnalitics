@@ -23,7 +23,7 @@ Every third-party dependency (library, model, dataset) considered for the produc
 | clsx | MIT | Safe | |
 | tailwind-merge | MIT | Safe | |
 | tw-animate-css | MIT | Safe | |
-| D3 | ISC | Safe | installed in Phase 1 (pulled in ahead of Phase 3's dataviz work); not yet used by any component |
+| D3 | ISC | Safe | installed in Phase 1 (pulled in ahead of Phase 3's dataviz work); in use since Phase 3 for `TacticalCourt`'s scales (`apps/web/src/components/court/tactical-court.tsx`) |
 | Three.js | MIT | Safe | not yet installed — pre-cleared, only when 3D encodes real information per ADR-001 |
 | React Three Fiber | MIT | Safe | not yet installed — pre-cleared alongside Three.js |
 | Motion (`motion` package, Framer Motion successor) | MIT | Safe | installed; used for `prefers-reduced-motion`-aware transitions |
@@ -64,12 +64,15 @@ Every third-party dependency (library, model, dataset) considered for the produc
 | pyright | MIT | Safe | dev-only, run via `uv run --with pyright` (not a project dependency) |
 | openapi-typescript | MIT | Safe | dev-only, `packages/contracts` codegen |
 | openapi-fetch | MIT | Safe | `packages/contracts` runtime client |
+| boto3 / botocore | Apache-2.0 | Safe | added Phase 4, `packages/storage-py`'s `R2StorageAdapter` -- S3-compatible client used for R2 presigned URLs (real code, genuinely unwired to a live bucket, no fake credentials -- see that module's docstring) |
+| python-multipart | Apache-2.0 | Safe | added 2026-08-31, `ml`'s new `server` optional-dependency group (`volley_ml.detection.server`) -- FastAPI's multipart/form-data parser, required for the local RF-DETR inference server's `/detect-frame` file-upload endpoint. Verified directly against installed package metadata (`python_multipart-*.dist-info/METADATA` -> `License-Expression: Apache-2.0`), not assumed. |
 
 ## Computer vision / ML
 
 | Dependency | Code License | Weights License | Tier | Notes |
 |---|---|---|---|---|
-| RF-DETR — Nano/Small/Medium/Large ("core") | Apache-2.0 | Apache-2.0 | **Safe** | Roboflow, first released 2025-03, ICLR 2026 |
+| NumPy 2.4.6 | BSD-3-Clause | n/a | Safe | Pinned by `ml/pyproject.toml` for DLT homography/triangulation, trajectory fitting and kinematics. License re-verified 2026-08-30 against NumPy's canonical `LICENSE.txt`. |
+| RF-DETR 1.9.4 — Nano/Small/Medium/Large ("core") | Apache-2.0 | Apache-2.0 | **Safe** | Inference dependency is optional and pinned; local smoke uses Nano. Roboflow, released 2026-08-24 |
 | RF-DETR — XLarge/2XLarge ("Plus", `rfdetr[plus]`) | Apache-2.0 (wrapper) | **PML-1.0 (custom, non-OSI)** | **BLOCKED without explicit decision** | Requires `accept_platform_model_license=True` + Roboflow account; terms under community scrutiny (`roboflow/rf-detr#592`, opened 2026-01) |
 | ByteTrack | MIT | n/a | Safe | canonical repo moved to `FoundationVision/ByteTrack` (ownership transfer, license unchanged) |
 | BoT-SORT | **MIT** | n/a | Safe | verified 2026-08-28 directly against LICENSE file; corrects an earlier internal assumption of GPL-3.0 |
@@ -84,16 +87,16 @@ Every third-party dependency (library, model, dataset) considered for the produc
 
 | Dependency | License | Tier | Notes |
 |---|---|---|---|
-| CVAT | MIT | Safe | self-hosted OSS core only; "Enterprise"/cloud tier is a separate commercial product, not depended on |
-| FiftyOne (OSS core) | Apache-2.0 | Safe | "FiftyOne Teams" is separate closed-source; depend only on the `fiftyone` pip package |
-| DVC | Apache-2.0 | Safe | acquired by lakeFS/Treeverse from Iterative.ai, 2025-11-18 — canonical repo now `treeverse/dvc`, license unchanged |
-| MLflow | Apache-2.0 | Safe | |
+| CVAT | MIT | Safe | self-hosted OSS core only; "Enterprise"/cloud tier is a separate commercial product, not depended on. Verified `cvat-ai/cvat` v2.74.0 (current release as of 2026-08-29). Not vendored into this repo's docker-compose -- see `docs/datasets/README.md` for why (an 18-service stack CVAT maintains itself) and the pinned clone-and-run instructions. |
+| FiftyOne (OSS core) | Apache-2.0 | Safe | "FiftyOne Teams" is separate closed-source; depend only on the `fiftyone` pip package (1.21.0 as of 2026-08-29). Wired Phase 4: `docker-compose.mlops.yml`'s `fiftyone` service, verified reachable at `http://localhost:5151` (HTTP 200) via the official `voxel51/fiftyone` Docker Hub image. |
+| DVC | Apache-2.0 | Safe | acquired by lakeFS/Treeverse from Iterative.ai, 2025-11-18 — canonical repo now `treeverse/dvc`, license unchanged (confirmed again Phase 4: `dvc init`'s own CLI output already points at `github.com/treeverse/dvc`). Wired Phase 4: real `dvc init`/`add`/`push`/`pull` round trip verified against a local dev remote (`.dvc-local-remote/`, gitignored) — see `data/examples/` and `docs/datasets/README.md`. DVC 3.67.1 as of 2026-08-29. |
+| MLflow | Apache-2.0 | Safe | Wired Phase 4: `docker-compose.mlops.yml`'s `mlflow` service (built from a minimal `pip install mlflow==3.15.2` Dockerfile, not a third-party registry image, for a fully auditable build), verified reachable and logging real runs (`tools/dataset_factory/dataset_factory/mlflow_smoke.py`) with real params/metrics/tags/git-commit auto-capture, confirmed via the tracking server's own REST API. |
 
 ## Media tooling
 
 | Dependency | License | Tier | Notes |
 |---|---|---|---|
-| FFmpeg (built without `--enable-gpl`/`--enable-nonfree`, no libx264/libx265/libfdk-aac) | LGPL-2.1+ | **Needs review — operational discipline required** | must dynamically link, ship/host source, retain notices; see `LICENSE_DECISIONS.md` for the concrete build policy |
+| FFmpeg (BtbN/FFmpeg-Builds `lgpl-shared`, pinned tag `autobuild-2026-08-29-13-12`, no `--enable-gpl`/`--enable-nonfree`, no libx264/libx265/libfdk-aac) | **LGPL-3.0-only** (not LGPL-2.1+ — corrected 2026-08-30: the pinned build has `--enable-version3` set, verified directly against the binary's own configuration string and the release tarball's bundled `LICENSE.txt`) | **Safe for this project's hosted-SaaS-only deployment model — operationalized, D-006 closed 2026-08-29, corrected 2026-08-30** | Dynamically linked (`--enable-shared --disable-static`), verified directly against the installed binary's own `-version` configuration string (not assumed from the release asset's name), both at Docker build time and at worker process startup. Checksum-verified against BtbN's own published `checksums.sha256` at install time. LGPLv3's stricter distribution obligations don't apply because this worker image is never distributed to a third party — see `LICENSE_DECISIONS.md` D-006's "Correction" section for the full reasoning, the confirmed deployment-model assumption, and two still-open hygiene items (LICENSE.txt not preserved in the built image; `THIRD_PARTY_NOTICES.md` not yet regenerated). |
 
 ## Explicitly excluded (reference-only or negative baseline — never a product dependency)
 

@@ -1,0 +1,57 @@
+[
+  {
+    "video_id": "paris-china-france-a",
+    "group_key": "Nh2l4GY8JYI",
+    "weight": 60.02
+  },
+  {
+    "video_id": "paris-china-france-b",
+    "group_key": "Nh2l4GY8JYI",
+    "weight": 60.04
+  },
+  {
+    "video_id": "paris-turkey-netherlands",
+    "group_key": "UOJ8_6sKnc8",
+    "weight": 60.12
+  },
+  {
+    "video_id": "paris-serbia-china",
+    "group_key": "uMNAmj77UPU",
+    "weight": 60.06
+  },
+  {
+    "video_id": "paris-italy-turkey",
+    "group_key": "8fd4Zq_4-58",
+    "weight": 60.12
+  },
+  {
+    "video_id": "vnl-italy-poland-a",
+    "group_key": "e83Z_nP7-xc",
+    "weight": 60.08
+  },
+  {
+    "video_id": "vnl-italy-poland-b",
+    "group_key": "e83Z_nP7-xc",
+    "weight": 60.08
+  },
+  {
+    "video_id": "vnl-japan-china-active",
+    "group_key": "pBo35TCOvHE",
+    "weight": 60.14
+  },
+  {
+    "video_id": "vnl-japan-china",
+    "group_key": "pBo35TCOvHE",
+    "weight": 60.14
+  },
+  {
+    "video_id": "paris-china-france-c",
+    "group_key": "Nh2l4GY8JYI",
+    "weight": 60.04
+  },
+  {
+    "video_id": "vnl-japan-china-c",
+    "group_key": "pBo35TCOvHE",
+    "weight": 60.1
+  }
+]

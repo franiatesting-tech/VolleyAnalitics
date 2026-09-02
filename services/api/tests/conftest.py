@@ -1,4 +1,6 @@
 import os
+import tempfile
+from pathlib import Path
 
 os.environ.setdefault("DATABASE_URL", "postgresql://unused:unused@unused/unused")
 os.environ.setdefault("VALKEY_URL", "redis://unused:6379/0")
@@ -6,10 +8,19 @@ os.environ.setdefault("AUTH_JWKS_URL", "http://unused/.well-known/jwks.json")
 os.environ.setdefault("AUTH_ISSUER", "http://unused")
 os.environ.setdefault("AUTH_AUDIENCE", "unused")
 os.environ.setdefault("ENV", "test")
+# Video-ingest tests (test_videos.py) exercise the real local StorageAdapter
+# against a throwaway directory -- never the developer's real
+# LOCAL_STORAGE_DIR, and never .env's value even if one is present.
+os.environ.setdefault(
+    "LOCAL_STORAGE_DIR", str(Path(tempfile.gettempdir()) / "volley-api-tests-storage")
+)
+os.environ.setdefault("LOCAL_STORAGE_BASE_URL", "http://test")
+os.environ.setdefault("LOCAL_STORAGE_SIGNING_SECRET", "test-only-signing-secret")
 
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import event
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 from volley_api.core.auth import Principal, get_current_principal
@@ -28,6 +39,19 @@ async def db_engine():
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
+
+    # SQLite doesn't enforce foreign keys (including ON DELETE
+    # CASCADE/SET NULL) unless told to per-connection -- without this,
+    # every real DB-level cascade (e.g. deleting a Video/Match) silently
+    # does nothing in tests while working correctly against real Postgres,
+    # which always enforces FKs. Matches the identical pattern already
+    # used in packages/domain-py's own cascade tests.
+    @event.listens_for(engine.sync_engine, "connect")
+    def _enable_sqlite_fk(dbapi_connection, _connection_record):
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
+
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     yield engine
@@ -39,6 +63,12 @@ def override_principal():
     """Mutable holder so individual tests can swap which principal the app
     sees, without re-registering the whole dependency override each time."""
     return {"value": TEST_PRINCIPAL}
+
+
+@pytest.fixture()
+def other_org_principal():
+    """A second tenant identity without importing pytest's conftest as a module."""
+    return OTHER_ORG_PRINCIPAL
 
 
 @pytest_asyncio.fixture()

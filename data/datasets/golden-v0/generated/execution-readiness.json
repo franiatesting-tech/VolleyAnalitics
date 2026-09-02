@@ -1,0 +1,52 @@
+{
+  "decisions": [
+    {
+      "executable_now": true,
+      "placement": "local_cpu_smoke",
+      "reason": "CPU execution is allowed only for integration smoke inference",
+      "stage": "rfdetr_nano_smoke"
+    },
+    {
+      "executable_now": false,
+      "placement": "external_gpu_required",
+      "reason": "The professional stage does not satisfy its local CUDA gate. A physical NVIDIA GeForce GTX 1650 (4 GiB) exists, but the installed PyTorch runtime cannot access CUDA.",
+      "stage": "player_detection_training"
+    },
+    {
+      "executable_now": false,
+      "placement": "external_gpu_required",
+      "reason": "The professional stage does not satisfy its local CUDA gate. A physical NVIDIA GeForce GTX 1650 (4 GiB) exists, but the installed PyTorch runtime cannot access CUDA.",
+      "stage": "player_detection_training_nano"
+    },
+    {
+      "executable_now": false,
+      "placement": "external_gpu_required",
+      "reason": "The professional stage does not satisfy its local CUDA gate. A physical NVIDIA GeForce GTX 1650 (4 GiB) exists, but the installed PyTorch runtime cannot access CUDA.",
+      "stage": "pose_2d_training"
+    },
+    {
+      "executable_now": false,
+      "placement": "external_gpu_required",
+      "reason": "The professional stage does not satisfy its local CUDA gate. A physical NVIDIA GeForce GTX 1650 (4 GiB) exists, but the installed PyTorch runtime cannot access CUDA.",
+      "stage": "contact_action_training"
+    },
+    {
+      "executable_now": false,
+      "placement": "external_gpu_required",
+      "reason": "The professional stage does not satisfy its local CUDA gate. A physical NVIDIA GeForce GTX 1650 (4 GiB) exists, but the installed PyTorch runtime cannot access CUDA.",
+      "stage": "multiview_3d_reference"
+    }
+  ],
+  "runtime": {
+    "cuda_available": false,
+    "cuda_devices": [],
+    "physical_devices": [
+      {
+        "memory_gib": 4.0,
+        "name": "NVIDIA GeForce GTX 1650"
+      }
+    ],
+    "torch_cuda_version": null,
+    "torch_version": "2.13.0+cpu"
+  }
+}

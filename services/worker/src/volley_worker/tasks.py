@@ -39,6 +39,23 @@ from volley_domain.tasks import PROCESS_DEMO_MATCH_TASK_NAME
 from volley_worker.celery_app import celery_app
 from volley_worker.db import session_scope
 
+# Same reason as ingest_video above -- run_video_detection lives in its own
+# volley_worker.detection module and would otherwise never actually
+# register with Celery (this exact gap was caught live: the task was
+# missing from `celery worker`'s own startup [tasks] banner until this
+# import was added).
+from volley_worker.detection import run_video_detection  # noqa: E402, F401
+
+# Celery's autodiscover_tasks(["volley_worker"]) (see celery_app.py) only
+# scans this module (the package's conventional "tasks.py") -- ingest_video
+# lives in its own volley_worker.ingest module (kept separate since it's a
+# genuinely different pipeline, not more demo-match logic), so it must be
+# imported here for its @celery_app.task decorator to actually run and
+# register the task. Re-exported so `from volley_worker.tasks import
+# ingest_video` also works, matching how this module is otherwise the
+# single place both services expect task names to resolve from.
+from volley_worker.ingest import ingest_video  # noqa: E402, F401
+
 logger = structlog.get_logger(__name__)
 
 

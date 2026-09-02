@@ -12,6 +12,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
 import { MatchStatusBadge, JobStatusBadge } from "@/components/match-status-badge";
+import { MatchAnalysis } from "@/components/match-analysis";
 
 export default function MatchDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -83,20 +84,8 @@ export default function MatchDetailPage({ params }: { params: Promise<{ id: stri
     }
   }, [jobQuery.data?.status, queryClient, id]);
 
-  const resultQuery = useQuery({
-    queryKey: ["match-result", id],
-    queryFn: async () => {
-      const { data, error } = await apiClient.GET("/api/v1/matches/{match_id}/result", {
-        params: { path: { match_id: id } },
-      });
-      if (error) throw new Error("Failed to load match result");
-      return data;
-    },
-    enabled: jobQuery.data?.status === "completed",
-  });
-
   return (
-    <div className="mx-auto flex max-w-4xl flex-col gap-6">
+    <div className="mx-auto flex max-w-6xl flex-col gap-6">
       <Link
         href="/matches"
         className="flex w-fit items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
@@ -184,67 +173,7 @@ export default function MatchDetailPage({ params }: { params: Promise<{ id: stri
           </Card>
 
           {jobQuery.data?.status === "completed" ? (
-            <Card data-testid="match-result">
-              <CardHeader>
-                <CardTitle>Result</CardTitle>
-                <CardDescription>Synthetic demo output for this match.</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {resultQuery.isPending ? (
-                  <Skeleton className="h-40 w-full" />
-                ) : resultQuery.isError ? (
-                  <Alert variant="destructive">
-                    <AlertCircle />
-                    <AlertDescription>Could not load the match result.</AlertDescription>
-                  </Alert>
-                ) : resultQuery.data ? (
-                  <div className="flex flex-col gap-4">
-                    <div className="grid grid-cols-2 gap-4 text-sm">
-                      <div>
-                        <p className="text-xs text-muted-foreground">Home roster</p>
-                        <p className="font-medium text-foreground">
-                          {resultQuery.data.home_roster?.team_name ?? matchQuery.data.home_team}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {resultQuery.data.home_roster?.players?.length ?? 0} players
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-muted-foreground">Away roster</p>
-                        <p className="font-medium text-foreground">
-                          {resultQuery.data.away_roster?.team_name ?? matchQuery.data.away_team}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {resultQuery.data.away_roster?.players?.length ?? 0} players
-                        </p>
-                      </div>
-                    </div>
-
-                    <div>
-                      <p className="mb-2 text-xs text-muted-foreground">
-                        Sets ({resultQuery.data.sets?.length ?? 0})
-                      </p>
-                      <ul className="flex flex-col divide-y divide-border" data-testid="set-list">
-                        {resultQuery.data.sets?.map((set, i) => (
-                          <li
-                            key={set.index ?? i}
-                            className="flex items-center justify-between py-2 text-sm"
-                          >
-                            <span className="text-muted-foreground">Set {(set.index ?? i) + 1}</span>
-                            <span className="font-mono text-foreground">
-                              {set.score?.home_points ?? "-"} : {set.score?.away_points ?? "-"}
-                            </span>
-                            <span className="text-xs text-muted-foreground">
-                              {set.rallies?.length ?? 0} rallies
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  </div>
-                ) : null}
-              </CardContent>
-            </Card>
+            <MatchAnalysis match={matchQuery.data} />
           ) : null}
         </>
       )}

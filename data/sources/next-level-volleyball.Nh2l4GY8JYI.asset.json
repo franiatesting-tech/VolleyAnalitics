@@ -1,0 +1,49 @@
+{
+  "source_id": "youtube-next-level-volleyball",
+  "video_id": "Nh2l4GY8JYI",
+  "source_url": "https://www.youtube.com/watch?v=Nh2l4GY8JYI",
+  "title": "Epic Court View! China vs France | Full Match | 2024 Olympics",
+  "acquired_at": "2026-08-30T13:22:00Z",
+  "acquisition_method": "yt-dlp direct HTTPS download, format 134",
+  "authorization_basis": "Channel-owner attestation in the Codex task on 2026-08-30",
+  "local_relative_path": "data/raw/next-level-volleyball/Nh2l4GY8JYI/Nh2l4GY8JYI.mp4",
+  "git_tracked": false,
+  "format_id": "134",
+  "container": "mp4",
+  "codec": "h264",
+  "audio_codec": null,
+  "width": 640,
+  "height": 360,
+  "fps": 25.0,
+  "duration_seconds": 5066.16,
+  "start_time_seconds": 0.0,
+  "time_base": "1/12800",
+  "size_bytes": 243690152,
+  "sha256": "ff21a74e24c2e176da0e8fa007047f1b3d9759c367340c1483c86243f91c1405",
+  "ingest_validation": {
+    "status": "ready",
+    "validated_at": "2026-08-30T13:23:40Z",
+    "worker_image": "volley-intelligence-worker:latest",
+    "ffmpeg_license": "verified_clean",
+    "database": "ephemeral SQLite smoke test"
+  },
+  "visual_qa": {
+    "sample_count": 5,
+    "sampling_start_seconds": 600,
+    "sampling_interval_seconds": 900,
+    "result": "accepted_for_geometry_and_player_tracking_prototype",
+    "camera": "stable fixed end-court view",
+    "court_visibility": "full court and net remain visible across all sampled timestamps",
+    "strengths": [
+      "stable homography candidate",
+      "clear team color separation",
+      "all on-court players visible in normal play",
+      "useful rotation and formation perspective"
+    ],
+    "limitations": [
+      "360p is too low for a strong production ball detector",
+      "jersey-number OCR will be unreliable at the far court",
+      "officials and staff create edge-of-court distractors"
+    ]
+  }
+}

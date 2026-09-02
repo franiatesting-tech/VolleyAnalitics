@@ -3,7 +3,7 @@
 import { useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertCircle, ChevronRight, Loader2, Plus, Swords } from "lucide-react";
+import { AlertCircle, ChevronRight, Loader2, Plus, Swords, Trash2 } from "lucide-react";
 
 import { apiClient } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
@@ -42,6 +42,24 @@ export default function MatchesPage() {
       queryClient.invalidateQueries({ queryKey: ["matches"] });
     },
   });
+
+  const deleteMatch = useMutation({
+    mutationFn: async (matchId: string) => {
+      const { error } = await apiClient.DELETE("/api/v1/matches/{match_id}", {
+        params: { path: { match_id: matchId } },
+      });
+      if (error) throw new Error("Failed to delete match");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["matches"] });
+    },
+  });
+
+  function onDelete(matchId: string, label: string) {
+    if (window.confirm(`Delete "${label}"? This permanently removes it and cannot be undone.`)) {
+      deleteMatch.mutate(matchId);
+    }
+  }
 
   function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -135,11 +153,10 @@ export default function MatchesPage() {
           ) : matchesQuery.data && matchesQuery.data.length > 0 ? (
             <ul className="flex flex-col divide-y divide-border" data-testid="matches-list">
               {matchesQuery.data.map((match) => (
-                <li key={match.id}>
+                <li key={match.id} className="flex items-center gap-2 py-1" data-testid="match-row">
                   <Link
                     href={`/matches/${match.id}`}
-                    className="flex items-center justify-between gap-4 py-3 hover:text-accent"
-                    data-testid="match-row"
+                    className="flex flex-1 items-center justify-between gap-4 rounded-md py-2 hover:text-accent"
                   >
                     <div className="flex items-center gap-3">
                       <Swords className="size-4 text-muted-foreground" />
@@ -157,6 +174,17 @@ export default function MatchesPage() {
                       <ChevronRight className="size-4 text-muted-foreground" />
                     </div>
                   </Link>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Delete match"
+                    onClick={() => onDelete(match.id, `${match.home_team} vs ${match.away_team}`)}
+                    disabled={deleteMatch.isPending}
+                    className="text-muted-foreground hover:text-destructive"
+                  >
+                    <Trash2 className="size-4" />
+                  </Button>
                 </li>
               ))}
             </ul>

@@ -7,12 +7,12 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "auth:generate": "pnpm dlx auth@latest generate --config src/lib/auth.ts -y",
-    "auth:migrate": "pnpm dlx auth@latest migrate --config src/lib/auth.ts -y"
+    "auth:generate": "pnpm dlx auth@1.7.2 generate --config src/lib/auth.ts -y",
+    "auth:migrate": "pnpm dlx auth@1.7.2 migrate --config src/lib/auth.ts -y"
   },
   "dependencies": {
     "@radix-ui/react-label": "^2.1.1",

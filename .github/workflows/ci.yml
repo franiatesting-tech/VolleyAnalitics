@@ -34,10 +34,26 @@ jobs:
         run: uv run ruff format --check .
 
       - name: Type check (pyright)
-        run: uv run --with pyright pyright packages/domain-py/src services/api/src services/worker/src
+        run: uv run --with pyright pyright packages/domain-py/src packages/storage-py/src services/api/src services/worker/src
 
       - name: Test domain-py
         run: uv run --package volley-domain pytest packages/domain-py/tests -q
+
+      - name: Test storage-py
+        run: uv run --package volley-storage pytest packages/storage-py/tests -q
+
+      - name: Install pinned LGPL ffmpeg build (D-006)
+        # ubuntu-latest's own preinstalled ffmpeg (and, verified during
+        # Phase 4, python:3.11-slim's `apt-get install ffmpeg` too) is a
+        # GPL build with libx264/libx265 enabled -- not license-clean per
+        # LICENSE_DECISIONS.md D-006. Install the exact same pinned build
+        # infra/docker/python.Dockerfile ships, so CI validates the real
+        # artifact, not whatever the runner happens to have.
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq xz-utils
+          bash infra/scripts/install-ffmpeg-lgpl.sh
+          echo "/usr/local/bin" >> "$GITHUB_PATH"
 
       - name: Test worker
         env:
@@ -58,6 +74,63 @@ jobs:
           AUTH_ISSUER: "http://localhost"
           AUTH_AUDIENCE: "volley-api"
         run: uv run --project .. --package volley-api alembic upgrade head --sql
+
+  dataset-factory:
+    name: Dataset factory tooling (pytest)
+    runs-on: ubuntu-latest
+    # Separate job, not a step in `python` above: tools/dataset_factory is
+    # deliberately NOT part of the root uv workspace (see its pyproject.toml
+    # -- FiftyOne/MLflow/DVC's heavy dependency trees must never leak into
+    # services/api or services/worker's lockfile/production image). Its own
+    # `uv sync` is slower (FiftyOne alone pulls in a large dependency tree)
+    # -- running it as an independent, parallel job means a slow or flaky
+    # install here never blocks the core product's fast feedback loop.
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "0.12.7"
+
+      - name: Set up Python 3.11
+        run: uv python install 3.11
+
+      - name: Install dependencies
+        working-directory: tools/dataset_factory
+        run: uv sync
+
+      - name: Test dataset_factory
+        working-directory: tools/dataset_factory
+        run: uv run pytest tests -q
+
+  ml-core:
+    name: ML geometry and biomechanics core
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "0.12.7"
+
+      - name: Set up Python 3.11
+        run: uv python install 3.11
+
+      - name: Install ML core dependencies
+        working-directory: ml
+        run: uv sync
+
+      - name: Lint and format check
+        working-directory: ml
+        run: |
+          uv run ruff check src tests
+          uv run ruff format --check src tests
+
+      - name: Test calibrated geometry and biomechanics
+        working-directory: ml
+        run: uv run pytest tests -q
 
   web:
     name: Web (lint, typecheck, vitest, build)
@@ -85,6 +158,9 @@ jobs:
 
       - name: Generate API contracts from OpenAPI
         run: pnpm gen:contracts
+
+      - name: Verify generated contracts are committed
+        run: git diff --exit-code -- packages/contracts/openapi.json packages/contracts/src/schema.d.ts
 
       - name: Lint
         run: pnpm --filter web lint
@@ -154,8 +230,16 @@ jobs:
         env:
           DATABASE_URL: "postgresql://volley:volley@localhost:5432/volley"
           VALKEY_URL: "redis://localhost:6379/0"
-          AUTH_JWKS_URL: "http://localhost:3000/api/auth/jwks"
-          AUTH_ISSUER: "http://localhost:3000"
+          # 127.0.0.1, not localhost -- ubuntu-latest runners resolve
+          # "localhost" to ::1 (IPv6) first, but uvicorn's --host 0.0.0.0
+          # below only listens on IPv4, so anything in this job that talks
+          # to our own just-started API/web servers over "localhost"
+          # silently never connects (confirmed: zero incoming requests
+          # ever reached uvicorn's access log across two real CI runs).
+          # Postgres/Valkey above are unaffected -- GH Actions' `services:`
+          # containers publish ports on both stacks via Docker.
+          AUTH_JWKS_URL: "http://127.0.0.1:3000/api/auth/jwks"
+          AUTH_ISSUER: "http://127.0.0.1:3000"
           AUTH_AUDIENCE: "volley-api"
         run: uv run --project .. --package volley-api alembic upgrade head
 
@@ -165,10 +249,10 @@ jobs:
           ENV: development
           DATABASE_URL: "postgresql://volley:volley@localhost:5432/volley"
           VALKEY_URL: "redis://localhost:6379/0"
-          AUTH_JWKS_URL: "http://localhost:3000/api/auth/jwks"
-          AUTH_ISSUER: "http://localhost:3000"
+          AUTH_JWKS_URL: "http://127.0.0.1:3000/api/auth/jwks"
+          AUTH_ISSUER: "http://127.0.0.1:3000"
           AUTH_AUDIENCE: "volley-api"
-          CORS_ALLOWED_ORIGINS: "http://localhost:3000"
+          CORS_ALLOWED_ORIGINS: "http://127.0.0.1:3000"
         run: uv run --project .. --package volley-api uvicorn volley_api.main:app --host 0.0.0.0 --port 8000 &
 
       - name: Start worker
@@ -177,6 +261,14 @@ jobs:
           ENV: development
           DATABASE_URL: "postgresql://volley:volley@localhost:5432/volley"
           VALKEY_URL: "redis://localhost:6379/0"
+          # This job tests the demo-match/UI flow, not video ingest --
+          # doesn't need a real, license-compliant ffmpeg on PATH at all
+          # (and ubuntu-latest's own preinstalled ffmpeg is very likely a
+          # GPL build, same finding as D-006 -- see LICENSE_DECISIONS.md).
+          # Without this, celery_app.py's D-006 startup check would raise
+          # FfmpegLicenseViolationError at import time and silently break
+          # this entire job's worker process.
+          SKIP_FFMPEG_LICENSE_CHECK: "true"
         run: uv run --project .. --package volley-worker celery -A volley_worker.celery_app.celery_app worker --loglevel=info &
 
       - name: Install Playwright browsers
@@ -185,7 +277,7 @@ jobs:
       - name: Migrate Better Auth's schema
         working-directory: apps/web
         env:
-          BETTER_AUTH_URL: "http://localhost:3000"
+          BETTER_AUTH_URL: "http://127.0.0.1:3000"
           BETTER_AUTH_SECRET: "ci-e2e-not-a-real-secret"
           DATABASE_URL: "postgresql://volley:volley@localhost:5432/volley"
         run: pnpm auth:migrate
@@ -193,29 +285,37 @@ jobs:
       - name: Build and start web
         working-directory: apps/web
         env:
-          NEXT_PUBLIC_API_URL: "http://localhost:8000"
-          BETTER_AUTH_URL: "http://localhost:3000"
+          NEXT_PUBLIC_API_URL: "http://127.0.0.1:8000"
+          BETTER_AUTH_URL: "http://127.0.0.1:3000"
           BETTER_AUTH_SECRET: "ci-e2e-not-a-real-secret"
           DATABASE_URL: "postgresql://volley:volley@localhost:5432/volley"
           # Must match the API's AUTH_ISSUER/AUTH_AUDIENCE above exactly --
           # otherwise Better Auth mints tokens with a default `aud` (its own
           # base URL) that services/api's JWT verification rejects, and
           # every authenticated call 401s. See ADR-003.
-          AUTH_ISSUER: "http://localhost:3000"
+          AUTH_ISSUER: "http://127.0.0.1:3000"
           AUTH_AUDIENCE: "volley-api"
         run: |
           pnpm build
           pnpm start &
 
       - name: Wait for services
+        # http-get:, not http: -- wait-on's default `http:` prefix sends an
+        # HTTP HEAD request, and /healthz only registers GET (confirmed
+        # directly: `curl -I` against a real running instance returns 405
+        # Method Not Allowed with `allow: GET`). The API was reachable and
+        # responding the whole time in every prior CI run; wait-on just
+        # never saw a 2xx because it was never sending a request the route
+        # actually accepts.
         run: |
-          npx wait-on http://localhost:8000/healthz http://localhost:3000 --timeout 60000
+          npx wait-on http-get://127.0.0.1:8000/healthz http-get://127.0.0.1:3000 --timeout 60000
 
       - name: Run Playwright smoke test
         env:
           # playwright.config.ts only spawns its own `pnpm dev` webServer
           # when this is unset -- we already built+started the production
           # server above, so point Playwright at it instead of racing a
-          # second server onto the same port.
-          PLAYWRIGHT_BASE_URL: "http://localhost:3000"
+          # second server onto the same port. 127.0.0.1, not localhost --
+          # see the "Run Alembic migrations" step's comment above for why.
+          PLAYWRIGHT_BASE_URL: "http://127.0.0.1:3000"
         run: pnpm --filter web exec playwright test --grep @smoke

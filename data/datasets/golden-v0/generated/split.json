@@ -1,0 +1,39 @@
+{
+  "counts": {
+    "test": 1,
+    "train": 8,
+    "val": 2
+  },
+  "group_key_by_video_id": {
+    "paris-china-france-a": "Nh2l4GY8JYI",
+    "paris-china-france-b": "Nh2l4GY8JYI",
+    "paris-china-france-c": "Nh2l4GY8JYI",
+    "paris-italy-turkey": "8fd4Zq_4-58",
+    "paris-serbia-china": "uMNAmj77UPU",
+    "paris-turkey-netherlands": "UOJ8_6sKnc8",
+    "vnl-italy-poland-a": "e83Z_nP7-xc",
+    "vnl-italy-poland-b": "e83Z_nP7-xc",
+    "vnl-japan-china": "pBo35TCOvHE",
+    "vnl-japan-china-active": "pBo35TCOvHE",
+    "vnl-japan-china-c": "pBo35TCOvHE"
+  },
+  "ratios": {
+    "test": 0.165,
+    "train": 0.67,
+    "val": 0.165
+  },
+  "seed": 42,
+  "split_by_video_id": {
+    "paris-china-france-a": "train",
+    "paris-china-france-b": "train",
+    "paris-china-france-c": "train",
+    "paris-italy-turkey": "train",
+    "paris-serbia-china": "test",
+    "paris-turkey-netherlands": "train",
+    "vnl-italy-poland-a": "val",
+    "vnl-italy-poland-b": "val",
+    "vnl-japan-china": "train",
+    "vnl-japan-china-active": "train",
+    "vnl-japan-china-c": "train"
+  }
+}

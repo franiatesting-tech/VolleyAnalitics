@@ -8,13 +8,13 @@ cross-tenant data leak, not a cosmetic bug.
 import asyncio
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from volley_domain.models import JobStatus, Match, MatchStatus, ProcessingJob
 from volley_domain.schemas import MatchCreate, MatchOut, ProcessingJobOut, SyntheticMatch
 
-from volley_api.core.auth import Principal, get_current_principal
+from volley_api.core.auth import Principal, get_current_principal, require_org_roles
 from volley_api.core.db import get_db
 from volley_api.core.tasks import PROCESS_DEMO_MATCH_TASK_NAME, enqueue_process_demo_match
 
@@ -42,7 +42,7 @@ async def list_matches(
 @router.post("/matches", response_model=MatchOut, status_code=status.HTTP_201_CREATED)
 async def create_match(
     body: MatchCreate,
-    principal: Principal = Depends(get_current_principal),
+    principal: Principal = Depends(require_org_roles("owner", "admin")),
     db: AsyncSession = Depends(get_db),
 ) -> Match:
     match = Match(
@@ -80,10 +80,30 @@ async def get_match(
     return await _get_org_scoped_match(match_id, principal, db)
 
 
+@router.delete("/matches/{match_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_match(
+    match_id: str,
+    principal: Principal = Depends(require_org_roles("owner", "admin")),
+    db: AsyncSession = Depends(get_db),
+) -> Response:
+    """Permanently deletes a match. Every `MatchSet`/`Rally`/.../`Outcome`
+    row and `ProcessingJob` row cascades at the DB level (all already
+    `ondelete="CASCADE"` from `matches.id`). Any `Video` linked to this
+    match only has that link cleared (`ondelete="SET NULL"` on
+    `Video.match_id`) -- deleting a match never deletes the video footage
+    itself; use `DELETE /videos/{id}` separately for that.
+    """
+    match = await _get_org_scoped_match(match_id, principal, db)
+    await db.delete(match)
+    await db.commit()
+    logger.info("match_deleted", match_id=match_id, organization_id=principal.organization_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 @router.post("/matches/{match_id}/demo-process", response_model=ProcessingJobOut)
 async def trigger_demo_process(
     match_id: str,
-    principal: Principal = Depends(get_current_principal),
+    principal: Principal = Depends(require_org_roles("owner", "admin")),
     db: AsyncSession = Depends(get_db),
 ) -> ProcessingJob:
     match = await _get_org_scoped_match(match_id, principal, db)

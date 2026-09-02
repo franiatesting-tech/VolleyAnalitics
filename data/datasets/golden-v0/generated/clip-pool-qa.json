@@ -1,0 +1,19 @@
+{
+  "active_play_count": 10,
+  "clip_count": 11,
+  "court_group_count": 2,
+  "duplicate_hashes": [],
+  "is_clean": true,
+  "leaking_source_videos": [],
+  "readiness": "ready_for_annotation_and_unlabelled_pretraining",
+  "source_video_count": 6,
+  "split_counts": {
+    "test": 1,
+    "train": 8,
+    "val": 2
+  },
+  "team_count": 8,
+  "total_duration_seconds": 660.94,
+  "transition_negative_count": 1,
+  "violations": []
+}

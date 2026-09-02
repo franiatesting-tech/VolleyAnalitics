@@ -32,6 +32,11 @@ class ActionRecord:
     court_x: float
     court_y: float
     quality_rating: int | None = None
+    # Mirrors Outcome.detail -- e.g. "blocked" for an attack error caused
+    # by an opposing block stuff. When present, compute_attack_stats
+    # trusts it directly; when absent (older/unlabeled data), it falls
+    # back to the adjacency heuristic -- see that function's docstring.
+    outcome_detail: str | None = None
 
 
 @dataclass(frozen=True)

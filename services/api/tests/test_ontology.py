@@ -5,7 +5,6 @@ the worker uses), not hand-typed fixtures -- proves the whole chain (models
 together, not just each piece in isolation."""
 
 import pytest
-from conftest import OTHER_ORG_PRINCIPAL
 from sqlalchemy.ext.asyncio import async_sessionmaker
 from volley_domain.models import Match
 from volley_domain.synthetic.generator import generate_synthetic_match
@@ -96,10 +95,49 @@ async def test_match_statistics_endpoint_returns_computed_stats(client, db_engin
 
 
 @pytest.mark.asyncio
-async def test_ontology_endpoints_are_org_scoped(client, db_engine, override_principal):
+async def test_stat_evidence_matches_the_aggregate_and_is_bounded(client, db_engine):
+    match_id = await _seed_persisted_match(db_engine)
+    stats_response = await client.get(f"/api/v1/matches/{match_id}/statistics")
+    stats = stats_response.json()
+    team_id, serve = next(iter(stats["serve"].items()))
+
+    response = await client.get(
+        f"/api/v1/matches/{match_id}/statistics/evidence",
+        params={"category": "serve_total", "team_id": team_id, "limit": 2},
+    )
+
+    assert response.status_code == 200
+    evidence = response.json()
+    assert evidence["formula_version"] == stats["formula_version"]
+    assert evidence["total_events"] == serve["total_serves"]
+    assert evidence["returned_events"] == min(2, serve["total_serves"])
+    assert evidence["is_truncated"] is (serve["total_serves"] > 2)
+    assert all(event["action_type"] == "serve" for event in evidence["events"])
+
+
+@pytest.mark.asyncio
+async def test_stat_evidence_zone_filter_uses_the_engine_zone_model(client, db_engine):
+    match_id = await _seed_persisted_match(db_engine)
+    stats = (await client.get(f"/api/v1/matches/{match_id}/statistics")).json()
+    team_id, attack = next(iter(stats["attack"].items()))
+    zone, expected_count = next(iter(attack["zone_counts"].items()))
+
+    response = await client.get(
+        f"/api/v1/matches/{match_id}/statistics/evidence",
+        params={"category": "attack_total", "team_id": team_id, "zone": zone},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["total_events"] == expected_count
+
+
+@pytest.mark.asyncio
+async def test_ontology_endpoints_are_org_scoped(
+    client, db_engine, override_principal, other_org_principal
+):
     match_id = await _seed_persisted_match(db_engine, organization_id="org-1")
 
-    override_principal["value"] = OTHER_ORG_PRINCIPAL
+    override_principal["value"] = other_org_principal
     sets_response = await client.get(f"/api/v1/matches/{match_id}/sets")
     assert sets_response.status_code == 404
 
@@ -109,10 +147,16 @@ async def test_ontology_endpoints_are_org_scoped(client, db_engine, override_pri
     stats_response = await client.get(f"/api/v1/matches/{match_id}/statistics")
     assert stats_response.status_code == 404
 
+    evidence_response = await client.get(
+        f"/api/v1/matches/{match_id}/statistics/evidence",
+        params={"category": "serve_total", "team_id": "team-any"},
+    )
+    assert evidence_response.status_code == 404
+
 
 @pytest.mark.asyncio
 async def test_rally_actions_endpoint_is_org_scoped_via_match_join(
-    client, db_engine, override_principal
+    client, db_engine, override_principal, other_org_principal
 ):
     """The rally-actions route resolves org scope by joining Rally -> Set ->
     Match, not from a column on Rally itself -- this is the specific join
@@ -121,7 +165,7 @@ async def test_rally_actions_endpoint_is_org_scoped_via_match_join(
     rallies_response = await client.get(f"/api/v1/matches/{match_id}/rallies")
     first_rally_id = rallies_response.json()[0]["id"]
 
-    override_principal["value"] = OTHER_ORG_PRINCIPAL
+    override_principal["value"] = other_org_principal
     response = await client.get(f"/api/v1/rallies/{first_rally_id}/actions")
     assert response.status_code == 404
 

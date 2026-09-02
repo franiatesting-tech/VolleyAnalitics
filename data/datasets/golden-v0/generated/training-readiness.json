@@ -1,0 +1,26 @@
+{
+  "dataset_version": "next-level-golden-v0",
+  "readiness": {
+    "court_calibration_2d": false,
+    "player_detection_tracking_2d": false,
+    "pose_biomechanics_2d": false,
+    "ball_tracking_2d": false,
+    "contact_attribution": false,
+    "metric_3d_reference": false
+  },
+  "blocking_reasons": [
+    "The current pool has media QA but no completed human-reviewed signal annotations.",
+    "No model may be trained or benchmarked as supervised until golden-v1 labels pass professional_signal_qa.",
+    "Reference metric 3D requires synchronized multi-camera calibration; current clips are monocular."
+  ],
+  "non_gating_evidence": {
+    "player_detection_smoke": {
+      "status": "preannotation_only_not_evaluated",
+      "model": "RF-DETR 1.9.4 Nano COCO",
+      "frames": 3,
+      "person_candidates": 33,
+      "review_queue_generated": true
+    }
+  },
+  "local_hardware_note": "The detected GTX 1650 with 4 GiB VRAM is suitable for smoke inference and small-model checks, not the professional RF-DETR Medium/RTMPose-L training baseline."
+}

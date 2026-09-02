@@ -43,6 +43,13 @@ services:
       AUTH_AUDIENCE: ${AUTH_AUDIENCE:-volley-api}
       DEV_AUTH_BYPASS: ${DEV_AUTH_BYPASS:-false}
       CORS_ALLOWED_ORIGINS: http://localhost:3000
+      # Local StorageAdapter's bind-mounted "bucket" (see .env.example's
+      # LOCAL_STORAGE_DIR) -- shared with worker below so both processes
+      # see the same uploaded bytes, mirroring how a real object store
+      # would be equally reachable from both in production.
+      LOCAL_STORAGE_DIR: /data/local-storage
+      LOCAL_STORAGE_BASE_URL: ${LOCAL_STORAGE_BASE_URL:-http://localhost:8000}
+      LOCAL_STORAGE_SIGNING_SECRET: ${LOCAL_STORAGE_SIGNING_SECRET:?set LOCAL_STORAGE_SIGNING_SECRET in .env -- see .env.example}
     depends_on:
       postgres:
         condition: service_healthy
@@ -51,6 +58,11 @@ services:
     volumes:
       - ./services/api:/workspace/services/api
       - ./packages/domain-py:/workspace/packages/domain-py
+      - ./packages/storage-py:/workspace/packages/storage-py
+      # volley-ml's base package (pure homography math for court
+      # calibration) -- see services/api/pyproject.toml's [tool.uv.sources].
+      - ./ml:/workspace/ml
+      - local_storage:/data/local-storage
 
   worker:
     build:
@@ -61,6 +73,9 @@ services:
       ENV: development
       DATABASE_URL: postgresql://volley:volley@postgres:5432/volley
       VALKEY_URL: redis://valkey:6379/0
+      LOCAL_STORAGE_DIR: /data/local-storage
+      LOCAL_STORAGE_BASE_URL: ${LOCAL_STORAGE_BASE_URL:-http://localhost:8000}
+      LOCAL_STORAGE_SIGNING_SECRET: ${LOCAL_STORAGE_SIGNING_SECRET:?set LOCAL_STORAGE_SIGNING_SECRET in .env -- see .env.example}
     depends_on:
       postgres:
         condition: service_healthy
@@ -69,6 +84,8 @@ services:
     volumes:
       - ./services/worker:/workspace/services/worker
       - ./packages/domain-py:/workspace/packages/domain-py
+      - ./packages/storage-py:/workspace/packages/storage-py
+      - local_storage:/data/local-storage
 
   # One-off job: creates Better Auth's own tables (owned by Better Auth's
   # CLI, never by Alembic -- see CLAUDE.md's auth ownership rule). Runs once
@@ -128,3 +145,4 @@ services:
 volumes:
   postgres_data:
   web_node_modules:
+  local_storage:
