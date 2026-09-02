@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   allRealBallSightings,
+  applyHomography,
+  ballSightingToCourtMeters,
   bboxCenter,
   isPlausibleBallLink,
   liveBallPosition,
@@ -9,6 +11,8 @@ import {
   recentBallTrailRuns,
   toBbox,
   type Bbox,
+  type CourtCalibrationForProjection,
+  type Homography,
   type TimedBall,
 } from "./ball-trajectory";
 
@@ -103,11 +107,12 @@ describe("allRealBallSightings", () => {
 
 describe("liveBallPosition", () => {
   it("interpolates between a plausible bracketing pair", () => {
-    const sightings = [ball(0, 0, 0), ball(1, 1, 1)];
+    // 0.3 units apart over 1s = 0.3 units/s, under the 0.5 fallback cap.
+    const sightings = [ball(0, 0, 0), ball(1, 0.3, 0)];
     const result = liveBallPosition(sightings, 0.5);
     expect(result).not.toBeNull();
-    expect(result!.bbox.x).toBeCloseTo(0.5);
-    expect(result!.bbox.y).toBeCloseTo(0.5);
+    expect(result!.bbox.x).toBeCloseTo(0.15);
+    expect(result!.bbox.y).toBeCloseTo(0);
   });
 
   it("holds briefly on the last real sighting when no plausible next exists", () => {
@@ -149,5 +154,84 @@ describe("recentBallTrailRuns", () => {
     const sightings = [ball(0, 0.1, 0.1), ball(5, 0.5, 0.5)];
     const runs = recentBallTrailRuns(sightings, 5, 1);
     expect(runs.flat()).toEqual([ball(5, 0.5, 0.5)]);
+  });
+});
+
+// pixel/100 = meters, a pure scale with no rotation/perspective -- easy to
+// hand-verify without depending on ml/court/geometry.py's own DLT
+// estimator (deliberately not ported to TS; see this file's own header).
+const SCALE_HOMOGRAPHY: Homography = [0.01, 0, 0, 0, 0.01, 0, 0, 0, 1];
+
+describe("applyHomography", () => {
+  it("applies a known scale homography", () => {
+    const [x, y] = applyHomography([500, 300], SCALE_HOMOGRAPHY);
+    expect(x).toBeCloseTo(5);
+    expect(y).toBeCloseTo(3);
+  });
+
+  it("throws on a homography that maps the point to infinity", () => {
+    const degenerate: Homography = [1, 0, 0, 0, 1, 0, 0, 0, 0];
+    expect(() => applyHomography([1, 1], degenerate)).toThrow();
+  });
+});
+
+describe("ballSightingToCourtMeters", () => {
+  it("scales a normalized bbox center up to pixels, then projects to meters", () => {
+    const calibration: CourtCalibrationForProjection = {
+      homography_matrix: SCALE_HOMOGRAPHY,
+      image_width: 1000,
+      image_height: 600,
+    };
+    // ball()'s bbox x/y is the top-left corner (width/height 0.02), so a
+    // center of exactly (0.5, 0.5) needs top-left (0.49, 0.49).
+    // Normalized center (0.5, 0.5) -> pixel (500, 300) -> meters (5, 3).
+    const sighting = ball(0, 0.49, 0.49);
+    const [x, y] = ballSightingToCourtMeters(sighting, calibration);
+    expect(x).toBeCloseTo(5);
+    expect(y).toBeCloseTo(3);
+  });
+});
+
+describe("isPlausibleBallLink with a calibration", () => {
+  const calibration: CourtCalibrationForProjection = {
+    homography_matrix: SCALE_HOMOGRAPHY,
+    image_width: 1000,
+    image_height: 1000,
+  };
+
+  it("accepts a real-world-plausible speed the normalized-space heuristic alone would reject", () => {
+    // Centers 0.3 apart in normalized space over 0.1s -> 3.0 normalized
+    // units/second, above MAX_BALL_LINK_SPEED_PER_SECOND (1.5) -- the
+    // fallback heuristic alone would reject this link. At this
+    // calibration's scale (100px = 1m, 1000px-wide frame = 10m), that's
+    // 300px = 3m real distance over 0.1s = 30 m/s, comfortably under
+    // MAX_BALL_LINK_SPEED_MPS (40) -- a real, fast spike, not a teleport.
+    // With a calibration present, the decision is made in real meters.
+    const a = ball(0, 0.1, 0.1);
+    const b = ball(0.1, 0.4, 0.1);
+    expect(isPlausibleBallLink(a, b)).toBe(false);
+    expect(isPlausibleBallLink(a, b, calibration)).toBe(true);
+  });
+
+  it("rejects a link whose real-world implied speed exceeds the fastest ball ever recorded", () => {
+    // Centers 0.5 apart in normalized space -> 500px apart -> 5m apart in
+    // real units, in 0.01s -> 500 m/s implied speed, far beyond
+    // MAX_BALL_LINK_SPEED_MPS (40).
+    const a = ball(0, 0.1, 0.1);
+    const b = ball(0.01, 0.6, 0.1);
+    expect(isPlausibleBallLink(a, b, calibration)).toBe(false);
+  });
+
+  it("falls back to the normalized-space heuristic when the homography is degenerate", () => {
+    const degenerateCalibration: CourtCalibrationForProjection = {
+      homography_matrix: [1, 0, 0, 0, 1, 0, 0, 0, 0],
+      image_width: 1000,
+      image_height: 1000,
+    };
+    // Close in normalized space (passes the fallback heuristic) even
+    // though projection itself would throw.
+    const a = ball(0, 0.1, 0.1);
+    const b = ball(0.5, 0.12, 0.1);
+    expect(isPlausibleBallLink(a, b, degenerateCalibration)).toBe(true);
   });
 });

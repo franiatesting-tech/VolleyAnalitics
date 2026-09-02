@@ -59,9 +59,9 @@ from volley_domain.ontology import (
 )
 from volley_domain.tasks import DETECTION_PIPELINE_VERSION, RUN_VIDEO_DETECTION_TASK_NAME
 
-from volley_worker.ball_filtering import find_static_false_positive_ids
+from volley_worker.ball_filtering import compute_burst_windows, find_static_false_positive_ids
 from volley_worker.celery_app import celery_app
-from volley_worker.config import get_settings
+from volley_worker.config import Settings, get_settings
 from volley_worker.db import session_scope
 from volley_worker.frame_extraction import FrameExtractionFailedError, extract_frames_at_fps
 from volley_worker.storage import get_storage_adapter
@@ -75,7 +75,9 @@ _HEALTH_CHECK_TIMEOUT_SECONDS = 120.0
 _PER_FRAME_TIMEOUT_SECONDS = 30.0
 
 
-def _config_hash(*, sample_fps: float, threshold: float) -> str:
+def _config_hash(
+    *, sample_fps: float, threshold: float, far_tiling_enabled: bool, burst_enabled: bool
+) -> str:
     """The API creates each PipelineRun row with a placeholder config_hash
     (see routes/videos.py's trigger_video_detection) since sample_fps/
     threshold are worker-side runtime settings it has no authoritative view
@@ -88,10 +90,121 @@ def _config_hash(*, sample_fps: float, threshold: float) -> str:
             "pipeline_version": DETECTION_PIPELINE_VERSION,
             "sample_fps": sample_fps,
             "threshold": threshold,
+            "far_tiling_enabled": far_tiling_enabled,
+            "burst_enabled": burst_enabled,
         },
         sort_keys=True,
     )
     return hashlib.sha256(payload.encode()).hexdigest()
+
+
+def _run_frame_batch(
+    client: httpx.Client,
+    settings: Settings,
+    video_id: str,
+    model_run_id: str,
+    frame_paths: list[Path],
+    *,
+    starting_frame_index: int,
+    fps: float,
+    base_timestamp_seconds: float,
+    enable_far_tiling: bool,
+) -> tuple[list[tuple[float, dict]], int, int, int]:
+    """Runs one batch of already-extracted frames through the inference
+    server and commits a VideoDetectionFrame row per frame -- shared by the
+    baseline pass and every burst-resampling window (see
+    run_video_detection's own docstring) so the bbox-normalization/commit
+    logic can't drift between call sites. `base_timestamp_seconds` is the
+    absolute video position of this batch's first frame; `starting_frame_index`
+    is the frame_index to use for that same frame -- both are chosen by the
+    caller so consecutive batches never collide on the
+    (model_run_id, frame_index) unique constraint and every stored
+    timestamp always means "seconds into the original video."
+
+    Returns (this batch's (timestamp, ball_detection) pairs, person
+    candidates found, ball candidates found, candidates vetoed as a shoe).
+    """
+    person_candidates = 0
+    ball_candidates = 0
+    vetoed_count = 0
+    ball_detections_with_timestamp: list[tuple[float, dict]] = []
+
+    for local_ordinal, frame_path in enumerate(frame_paths):
+        frame_index = starting_frame_index + local_ordinal
+        timestamp_seconds = base_timestamp_seconds + local_ordinal / fps
+        with frame_path.open("rb") as source_file:
+            response = client.post(
+                f"{settings.detection_inference_url}/detect-frame",
+                files={"image": (frame_path.name, source_file, "image/jpeg")},
+                data={
+                    "threshold": str(settings.detection_threshold),
+                    "ball_threshold": str(settings.detection_ball_threshold),
+                    "enable_far_tiling": str(enable_far_tiling),
+                },
+            )
+        response.raise_for_status()
+        payload = response.json()
+        width, height = payload["image_width"], payload["image_height"]
+        detections = [
+            {
+                "candidate_id": f"{video_id}:{frame_index}:{index}",
+                "bbox": {
+                    "x": box["x1"] / width,
+                    "y": box["y1"] / height,
+                    "width": (box["x2"] - box["x1"]) / width,
+                    "height": (box["y2"] - box["y1"]) / height,
+                },
+                "confidence": box["confidence"],
+                "jersey_color_outlier": box["jersey_color_outlier"],
+            }
+            for index, box in enumerate(payload["boxes"])
+        ]
+        # At most one ball reading per frame -- verified directly against
+        # real match footage that ~46% of frames with any ball detection
+        # had multiple simultaneous candidates, mostly harmless
+        # near-duplicate boxes around one real object, but with no
+        # principled way downstream to choose among them.
+        best_ball = max(payload["balls"], key=lambda b: b["confidence"], default=None)
+        ball_detections = (
+            [
+                {
+                    "candidate_id": f"{video_id}:{frame_index}:ball:0",
+                    "bbox": {
+                        "x": best_ball["x1"] / width,
+                        "y": best_ball["y1"] / height,
+                        "width": (best_ball["x2"] - best_ball["x1"]) / width,
+                        "height": (best_ball["y2"] - best_ball["y1"]) / height,
+                    },
+                    "confidence": best_ball["confidence"],
+                    # Overwritten below, once every frame across both the
+                    # baseline and burst passes has been persisted and the
+                    # full-video static-position filter can see the whole
+                    # picture -- see find_static_false_positive_ids's
+                    # docstring.
+                    "is_static_false_positive": False,
+                }
+            ]
+            if best_ball is not None
+            else []
+        )
+        person_candidates += len(detections)
+        ball_candidates += len(ball_detections)
+        vetoed_count += payload.get("ball_candidates_vetoed_by_foot_overlap", 0)
+        ball_detections_with_timestamp.extend((timestamp_seconds, ball) for ball in ball_detections)
+
+        with session_scope() as db:
+            db.add(
+                VideoDetectionFrame(
+                    video_id=video_id,
+                    model_run_id=model_run_id,
+                    frame_index=frame_index,
+                    timestamp_seconds=timestamp_seconds,
+                    detections=detections,
+                    ball_detections=ball_detections,
+                )
+            )
+
+    return ball_detections_with_timestamp, person_candidates, ball_candidates, vetoed_count
 
 
 @celery_app.task(
@@ -196,11 +309,13 @@ def run_video_detection(
                     model_version=model_version,
                     weights_hash=weights_sha256,
                     metrics={
-                        "sample_fps": effective_sample_fps,
+                        "base_sample_fps": effective_sample_fps,
                         "threshold": settings.detection_threshold,
                         "ball_threshold": settings.detection_ball_threshold,
                         "max_duration_seconds": max_duration_seconds,
                         "start_offset_seconds": start_offset_seconds,
+                        "far_tiling_enabled": settings.detection_far_tiling_enabled,
+                        "burst_enabled": settings.detection_burst_enabled,
                         "frames_total": len(frame_paths),
                     },
                 )
@@ -208,89 +323,106 @@ def run_video_detection(
                 db.flush()
                 model_run_id = model_run.id
 
-            person_candidates = 0
-            ball_candidates = 0
-            # Accumulated purely in memory (small -- a handful of ball
-            # boxes per frame at most) so the static-false-positive filter
-            # below can see every ball detection across the whole video
-            # after the loop, without a second DB round trip.
-            all_ball_detections: list[tuple[float, dict]] = []
+            # Position within the *extracted* clip, plus the skipped prefix
+            # added back -- the frontend syncs these timestamps against the
+            # real, untrimmed video's own <video>.currentTime, so a stored
+            # timestamp must always mean "seconds into the original video,"
+            # never "seconds into whatever ffmpeg happened to extract."
             with httpx.Client(timeout=_PER_FRAME_TIMEOUT_SECONDS) as client:
-                for ordinal, frame_path in enumerate(frame_paths, start=1):
-                    # Position within the *extracted* clip, plus the
-                    # skipped prefix added back -- the frontend syncs these
-                    # timestamps against the real, untrimmed video's own
-                    # <video>.currentTime, so a stored timestamp must
-                    # always mean "seconds into the original video," never
-                    # "seconds into whatever ffmpeg happened to extract."
-                    timestamp_seconds = (ordinal - 1) / effective_sample_fps + (
-                        start_offset_seconds or 0.0
+                all_ball_detections, person_candidates, ball_candidates, vetoed_count = (
+                    _run_frame_batch(
+                        client,
+                        settings,
+                        video_id,
+                        model_run_id,
+                        frame_paths,
+                        starting_frame_index=1,
+                        fps=effective_sample_fps,
+                        base_timestamp_seconds=start_offset_seconds or 0.0,
+                        enable_far_tiling=settings.detection_far_tiling_enabled,
                     )
-                    with frame_path.open("rb") as source_file:
-                        response = client.post(
-                            f"{settings.detection_inference_url}/detect-frame",
-                            files={"image": (frame_path.name, source_file, "image/jpeg")},
-                            data={
-                                "threshold": str(settings.detection_threshold),
-                                "ball_threshold": str(settings.detection_ball_threshold),
-                            },
-                        )
-                    response.raise_for_status()
-                    payload = response.json()
-                    width, height = payload["image_width"], payload["image_height"]
-                    detections = [
-                        {
-                            "candidate_id": f"{video_id}:{ordinal}:{index}",
-                            "bbox": {
-                                "x": box["x1"] / width,
-                                "y": box["y1"] / height,
-                                "width": (box["x2"] - box["x1"]) / width,
-                                "height": (box["y2"] - box["y1"]) / height,
-                            },
-                            "confidence": box["confidence"],
-                            "jersey_color_outlier": box["jersey_color_outlier"],
-                        }
-                        for index, box in enumerate(payload["boxes"])
-                    ]
-                    ball_detections = [
-                        {
-                            "candidate_id": f"{video_id}:{ordinal}:ball:{index}",
-                            "bbox": {
-                                "x": ball["x1"] / width,
-                                "y": ball["y1"] / height,
-                                "width": (ball["x2"] - ball["x1"]) / width,
-                                "height": (ball["y2"] - ball["y1"]) / height,
-                            },
-                            "confidence": ball["confidence"],
-                            # Overwritten below, once every frame has been
-                            # processed and the full-video static-position
-                            # filter can actually see the whole picture --
-                            # see find_static_false_positive_ids's docstring.
-                            "is_static_false_positive": False,
-                        }
-                        for index, ball in enumerate(payload["balls"])
-                    ]
-                    person_candidates += len(detections)
-                    ball_candidates += len(ball_detections)
-                    all_ball_detections.extend(
-                        (timestamp_seconds, ball) for ball in ball_detections
-                    )
+                )
+                next_frame_index = len(frame_paths) + 1
 
-                    # Committed per-frame, not batched -- this row existing
-                    # at all is what makes progress observable mid-run and
-                    # survivable across a worker restart.
-                    with session_scope() as db:
-                        db.add(
-                            VideoDetectionFrame(
-                                video_id=video_id,
-                                model_run_id=model_run_id,
-                                frame_index=ordinal,
-                                timestamp_seconds=timestamp_seconds,
-                                detections=detections,
-                                ball_detections=ball_detections,
+                burst_windows_count = 0
+                burst_windows_dropped = 0
+                burst_frames_added = 0
+                if settings.detection_burst_enabled:
+                    # A static false positive is a fixed scene object, never
+                    # a real fast-moving ball -- it must never trigger a
+                    # burst window. This provisional pass looks only at
+                    # what the baseline pass itself found; the real, final
+                    # static-false-positive flag (after this whole block)
+                    # is recomputed once more over the combined
+                    # baseline+burst data, since a burst-added detection
+                    # near the same static spot must be flagged too.
+                    provisional_static_ids = find_static_false_positive_ids(all_ball_detections)
+                    real_ball_timestamps = [
+                        ts
+                        for ts, ball in all_ball_detections
+                        if ball["candidate_id"] not in provisional_static_ids
+                    ]
+                    burst_windows, burst_windows_dropped = compute_burst_windows(
+                        real_ball_timestamps,
+                        window_radius_seconds=settings.detection_burst_window_radius_seconds,
+                        max_windows=settings.detection_burst_max_windows,
+                    )
+                    burst_windows_count = len(burst_windows)
+
+                    if burst_windows:
+                        burst_frame_paths_by_window = [
+                            extract_frames_at_fps(
+                                local_video,
+                                tmp_path / f"burst_{window_index}",
+                                fps=settings.detection_burst_fps,
+                                start_offset_seconds=window_start,
+                                max_duration_seconds=window_end - window_start,
                             )
-                        )
+                            for window_index, (window_start, window_end) in enumerate(burst_windows)
+                        ]
+                        burst_frames_added = sum(len(fp) for fp in burst_frame_paths_by_window)
 
+                        # frames_total is the API's live progress-bar
+                        # denominator (see VideoDetectionStatusOut) --
+                        # updated before any burst frame starts committing,
+                        # or a polling client's progress bar undercounts
+                        # for the whole burst phase.
+                        with session_scope() as db:
+                            refreshed_model_run = db.get(ModelRun, model_run_id)
+                            if refreshed_model_run is not None:
+                                refreshed_model_run.metrics = {
+                                    **(refreshed_model_run.metrics or {}),
+                                    "frames_total": len(frame_paths) + burst_frames_added,
+                                }
+
+                        for (window_start, _window_end), window_frames in zip(
+                            burst_windows, burst_frame_paths_by_window, strict=True
+                        ):
+                            if not window_frames:
+                                continue
+                            (
+                                window_ball_detections,
+                                window_person_candidates,
+                                window_ball_candidates,
+                                window_vetoed_count,
+                            ) = _run_frame_batch(
+                                client,
+                                settings,
+                                video_id,
+                                model_run_id,
+                                window_frames,
+                                starting_frame_index=next_frame_index,
+                                fps=settings.detection_burst_fps,
+                                base_timestamp_seconds=window_start,
+                                enable_far_tiling=settings.detection_far_tiling_enabled,
+                            )
+                            next_frame_index += len(window_frames)
+                            all_ball_detections.extend(window_ball_detections)
+                            person_candidates += window_person_candidates
+                            ball_candidates += window_ball_candidates
+                            vetoed_count += window_vetoed_count
+
+        frames_processed = next_frame_index - 1
         static_false_positive_ids = find_static_false_positive_ids(all_ball_detections)
         if static_false_positive_ids:
             log.info(
@@ -303,7 +435,9 @@ def run_video_detection(
                 # both this project's DB backends (SQLite in tests vs.
                 # Postgres in real use) at the SQL level for a JSON column
                 # -- fetched and filtered in Python instead, same as this
-                # module's other per-model_run queries.
+                # module's other per-model_run queries. Covers both the
+                # baseline pass and every burst window's rows, since they
+                # all share this one model_run_id.
                 frames = db.query(VideoDetectionFrame).filter_by(model_run_id=model_run_id).all()
                 for frame in frames:
                     if not frame.ball_detections:
@@ -330,26 +464,34 @@ def run_video_detection(
             model_run.completed_at = datetime.now(UTC)
             model_run.metrics = {
                 **(model_run.metrics or {}),
-                "frames_processed": len(frame_paths),
+                "frames_processed": frames_processed,
                 "person_candidates": person_candidates,
                 "ball_candidates": ball_candidates,
+                "ball_candidates_vetoed_by_foot_overlap": vetoed_count,
+                "burst_sample_fps": settings.detection_burst_fps,
+                "burst_windows_count": burst_windows_count,
+                "burst_windows_dropped": burst_windows_dropped,
+                "burst_frames_added": burst_frames_added,
             }
 
             pipeline_run.status = PipelineRunStatus.COMPLETED
             pipeline_run.completed_at = datetime.now(UTC)
             pipeline_run.config_hash = _config_hash(
-                sample_fps=effective_sample_fps, threshold=settings.detection_threshold
+                sample_fps=effective_sample_fps,
+                threshold=settings.detection_threshold,
+                far_tiling_enabled=settings.detection_far_tiling_enabled,
+                burst_enabled=settings.detection_burst_enabled,
             )
 
         log.info(
             "run_video_detection_completed",
-            frames_processed=len(frame_paths),
+            frames_processed=frames_processed,
             model_version=model_version,
         )
         return {
             "status": "completed",
             "pipeline_run_id": pipeline_run_id,
-            "frames_processed": len(frame_paths),
+            "frames_processed": frames_processed,
         }
 
     except httpx.ConnectError as exc:

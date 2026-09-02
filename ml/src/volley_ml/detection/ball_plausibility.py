@@ -56,6 +56,32 @@ _MIN_ACCENT_FRACTION = 0.08
 # genuinely elongates it along its direction of travel, so this stays
 # generous rather than requiring a near-perfect square.
 _MAX_ASPECT_RATIO = 1.9
+# Below this many post-inset pixels, has_ball_color_pattern abstains
+# (accepts) rather than rejects on color grounds -- verified directly
+# against real 640x360 match footage that a real ball detection's box is
+# often only ~10x10px pre-inset (~8x9px, ~70px^2, post-inset), close to or
+# below a single H.264/JPEG macroblock. At that scale nearly every sampled
+# pixel is already a compression-blurred blend of ball-white, accent
+# color, motion blur and background bleed, and a 1-2px localization error
+# from a low-confidence detector can shift the whole sample off the panel
+# pattern -- the white/accent fractions below stop being a reliable signal
+# long before they become actively misleading. The shape gate
+# (has_plausible_ball_shape) still applies regardless of size.
+_MIN_CROP_AREA_PX = 64
+
+# A shoe is always physically attached to a person, specifically at foot
+# level -- a real ball during a genuine contact (serve, spike, set, block)
+# sits near a raised hand/arm/head instead. But a real defensive dig/floor
+# save also brings the ball to foot/shin height, right beside (not inside)
+# the digging player's own foot -- so this deliberately requires
+# near-total containment, not mere overlap, to avoid vetoing a real dig.
+# Direct response to real user feedback ("the ball is sometimes confused
+# with shoes") -- unvalidated against real footage like every other
+# threshold in this module; watch ModelRun.metrics'
+# ball_candidates_vetoed_by_foot_overlap on the next real run and re-tune
+# if it's suppressing genuine digs.
+_FOOT_ZONE_HEIGHT_FRACTION = 0.28
+_FOOT_OVERLAP_MIN_CONTAINMENT = 0.65
 
 
 def _rgb_to_hsv(rgb: NDArray[np.float64]) -> NDArray[np.float64]:
@@ -118,6 +144,9 @@ def has_ball_color_pattern(
     crop = image[top:bottom, left:right]
     if crop.size == 0:
         return False
+    crop_area_px = crop.shape[0] * crop.shape[1]
+    if crop_area_px < _MIN_CROP_AREA_PX:
+        return True
 
     pixels = crop.reshape(-1, 3).astype(np.float64)
     hsv = _rgb_to_hsv(pixels)
@@ -145,3 +174,48 @@ def has_plausible_ball_shape(bbox_xyxy_px: tuple[float, float, float, float]) ->
         return False
     ratio = max(width, height) / min(width, height)
     return ratio <= _MAX_ASPECT_RATIO
+
+
+def _box_area(bbox_xyxy_px: tuple[float, float, float, float]) -> float:
+    x1, y1, x2, y2 = bbox_xyxy_px
+    return max(0.0, x2 - x1) * max(0.0, y2 - y1)
+
+
+def _intersection_area(
+    a: tuple[float, float, float, float], b: tuple[float, float, float, float]
+) -> float:
+    ax1, ay1, ax2, ay2 = a
+    bx1, by1, bx2, by2 = b
+    ix1, iy1 = max(ax1, bx1), max(ay1, by1)
+    ix2, iy2 = min(ax2, bx2), min(ay2, by2)
+    return max(0.0, ix2 - ix1) * max(0.0, iy2 - iy1)
+
+
+def is_ball_at_person_foot_level(
+    ball_bbox_xyxy_px: tuple[float, float, float, float],
+    person_boxes_xyxy_px: list[tuple[float, float, float, float]],
+    *,
+    foot_zone_height_fraction: float = _FOOT_ZONE_HEIGHT_FRACTION,
+    min_containment_fraction: float = _FOOT_OVERLAP_MIN_CONTAINMENT,
+) -> bool:
+    """True if `ball_bbox_xyxy_px` is almost certainly a shoe, not a real
+    ball -- i.e. it sits nearly entirely inside the bottom
+    `foot_zone_height_fraction` of some person's own box. Deliberately a
+    containment check, not a mere-overlap check: a real ball beside a
+    player's foot during a genuine dig should NOT be vetoed, only a
+    candidate effectively swallowed by the person's own foot-level
+    silhouette, which is what a shoe box necessarily is. See module
+    docstring for the accepted false-negative risk this trades off."""
+    ball_area = _box_area(ball_bbox_xyxy_px)
+    if ball_area <= 0:
+        return False
+    for person_box in person_boxes_xyxy_px:
+        px1, py1, px2, py2 = person_box
+        person_height = py2 - py1
+        if person_height <= 0:
+            continue
+        foot_zone = (px1, py2 - person_height * foot_zone_height_fraction, px2, py2)
+        contained_fraction = _intersection_area(ball_bbox_xyxy_px, foot_zone) / ball_area
+        if contained_fraction >= min_containment_fraction:
+            return True
+    return False

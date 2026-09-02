@@ -484,7 +484,7 @@ async def test_detections_returns_real_boxes_for_a_completed_run(client, db_engi
             stage=ModelRunStage.DETECTION,
             model_version="rfdetr-1.9.4-nano-coco-smoke",
             weights_hash="f" * 64,
-            metrics={"sample_fps": 0.5, "threshold": 0.35, "frames_total": 1},
+            metrics={"base_sample_fps": 0.5, "threshold": 0.35, "frames_total": 1},
         )
         db.add(model_run)
         await db.flush()
@@ -638,3 +638,243 @@ async def test_delete_video_is_org_scoped(client, override_principal, other_org_
     override_principal["value"] = other_org_principal
     delete_resp = await client.delete(f"/api/v1/videos/{video_id}")
     assert delete_resp.status_code == 404
+
+
+def _exact_scale_corner_keypoints() -> list[dict]:
+    """Pixel (0,0)-(900,1800) maps to court (0,0)-(9,18) meters by a pure
+    /100 scale -- an exact 4-point fit (0 degrees of freedom left over), so
+    the recovered homography's reprojection error against these same 4
+    points should be ~0, a hand-verifiable expectation rather than a
+    number that has to be trusted from the algorithm itself."""
+    return [
+        {"keypoint_name": "near_baseline_left", "x_pixel": 0.0, "y_pixel": 0.0},
+        {"keypoint_name": "near_baseline_right", "x_pixel": 900.0, "y_pixel": 0.0},
+        {"keypoint_name": "far_baseline_left", "x_pixel": 0.0, "y_pixel": 1800.0},
+        {"keypoint_name": "far_baseline_right", "x_pixel": 900.0, "y_pixel": 1800.0},
+    ]
+
+
+async def _create_ready_video(client, db_engine) -> str:
+    create_resp = await client.post(
+        "/api/v1/videos", json={"filename": "match.mp4", "content_type": "video/mp4"}
+    )
+    video_id = create_resp.json()["video_id"]
+    await _mark_video_ready(db_engine, video_id)
+    return video_id
+
+
+@pytest.mark.asyncio
+async def test_court_calibration_requires_the_video_to_be_ready(client):
+    create_resp = await client.post(
+        "/api/v1/videos", json={"filename": "match.mp4", "content_type": "video/mp4"}
+    )
+    video_id = create_resp.json()["video_id"]
+
+    resp = await client.post(
+        f"/api/v1/videos/{video_id}/court-calibration",
+        json={
+            "image_width": 900,
+            "image_height": 1800,
+            "keypoints": _exact_scale_corner_keypoints(),
+        },
+    )
+    assert resp.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_create_court_calibration_computes_a_near_zero_reprojection_error_for_an_exact_fit(
+    client, db_engine
+):
+    video_id = await _create_ready_video(client, db_engine)
+
+    resp = await client.post(
+        f"/api/v1/videos/{video_id}/court-calibration",
+        json={
+            "image_width": 900,
+            "image_height": 1800,
+            "keypoints": _exact_scale_corner_keypoints(),
+            "net_height_m": 2.43,
+        },
+    )
+    assert resp.status_code == 201
+    body = resp.json()
+    assert body["method"] == "manual"
+    assert body["reprojection_error_px"] == pytest.approx(0.0, abs=1e-6)
+    assert len(body["homography_matrix"]) == 9
+    assert body["net_height_m"] == pytest.approx(2.43)
+    assert body["court_width_m"] == pytest.approx(9.0)
+    assert body["court_length_m"] == pytest.approx(18.0)
+    assert body["created_by_user_id"] == "user-1"
+
+
+@pytest.mark.asyncio
+async def test_create_court_calibration_zone_mirror_x_is_optional_and_persisted(client, db_engine):
+    video_id = await _create_ready_video(client, db_engine)
+
+    # Omitted entirely -- stays None, never guessed.
+    resp = await client.post(
+        f"/api/v1/videos/{video_id}/court-calibration",
+        json={
+            "image_width": 900,
+            "image_height": 1800,
+            "keypoints": _exact_scale_corner_keypoints(),
+        },
+    )
+    assert resp.status_code == 201
+    assert resp.json()["zone_mirror_x"] is None
+
+    # Explicitly set -- persisted and returned.
+    resp = await client.post(
+        f"/api/v1/videos/{video_id}/court-calibration",
+        json={
+            "image_width": 900,
+            "image_height": 1800,
+            "keypoints": _exact_scale_corner_keypoints(),
+            "zone_mirror_x": True,
+        },
+    )
+    assert resp.status_code == 201
+    assert resp.json()["zone_mirror_x"] is True
+
+    get_resp = await client.get(f"/api/v1/videos/{video_id}/court-calibration")
+    assert get_resp.json()["zone_mirror_x"] is True
+
+
+@pytest.mark.asyncio
+async def test_create_court_calibration_rejects_collinear_keypoints(client, db_engine):
+    video_id = await _create_ready_video(client, db_engine)
+
+    collinear = [
+        {"keypoint_name": "near_baseline_left", "x_pixel": 0.0, "y_pixel": 0.0},
+        {"keypoint_name": "near_baseline_right", "x_pixel": 100.0, "y_pixel": 0.0},
+        {"keypoint_name": "near_attack_line_left", "x_pixel": 200.0, "y_pixel": 0.0},
+        {"keypoint_name": "near_attack_line_right", "x_pixel": 300.0, "y_pixel": 0.0},
+    ]
+    resp = await client.post(
+        f"/api/v1/videos/{video_id}/court-calibration",
+        json={"image_width": 900, "image_height": 1800, "keypoints": collinear},
+    )
+    assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_create_court_calibration_rejects_fewer_than_four_visible_keypoints(
+    client, db_engine
+):
+    video_id = await _create_ready_video(client, db_engine)
+
+    three_visible = _exact_scale_corner_keypoints()[:3]
+    resp = await client.post(
+        f"/api/v1/videos/{video_id}/court-calibration",
+        json={"image_width": 900, "image_height": 1800, "keypoints": three_visible},
+    )
+    assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_create_court_calibration_supersedes_the_previous_one(client, db_engine):
+    video_id = await _create_ready_video(client, db_engine)
+
+    first_resp = await client.post(
+        f"/api/v1/videos/{video_id}/court-calibration",
+        json={
+            "image_width": 900,
+            "image_height": 1800,
+            "keypoints": _exact_scale_corner_keypoints(),
+        },
+    )
+    first_id = first_resp.json()["id"]
+
+    second_resp = await client.post(
+        f"/api/v1/videos/{video_id}/court-calibration",
+        json={
+            "image_width": 900,
+            "image_height": 1800,
+            "keypoints": _exact_scale_corner_keypoints(),
+        },
+    )
+    assert second_resp.status_code == 201
+    second_id = second_resp.json()["id"]
+    assert second_id != first_id
+
+    from sqlalchemy.ext.asyncio import async_sessionmaker
+    from volley_domain.ontology import CourtCalibration
+
+    session_factory = async_sessionmaker(db_engine, expire_on_commit=False)
+    async with session_factory() as db:
+        first = await db.get(CourtCalibration, first_id)
+        assert first.superseded_at is not None
+        second = await db.get(CourtCalibration, second_id)
+        assert second.superseded_at is None
+
+    get_resp = await client.get(f"/api/v1/videos/{video_id}/court-calibration")
+    assert get_resp.json()["id"] == second_id
+
+
+@pytest.mark.asyncio
+async def test_get_court_calibration_is_honest_when_none_exists(client, db_engine):
+    video_id = await _create_ready_video(client, db_engine)
+
+    resp = await client.get(f"/api/v1/videos/{video_id}/court-calibration")
+    assert resp.status_code == 200
+    assert resp.json() is None
+
+
+@pytest.mark.asyncio
+async def test_preview_court_calibration_does_not_persist_anything(client, db_engine):
+    video_id = await _create_ready_video(client, db_engine)
+
+    preview_resp = await client.post(
+        f"/api/v1/videos/{video_id}/court-calibration/preview",
+        json={
+            "image_width": 900,
+            "image_height": 1800,
+            "keypoints": _exact_scale_corner_keypoints(),
+        },
+    )
+    assert preview_resp.status_code == 200
+    assert preview_resp.json()["reprojection_error_px"] == pytest.approx(0.0, abs=1e-6)
+
+    get_resp = await client.get(f"/api/v1/videos/{video_id}/court-calibration")
+    assert get_resp.json() is None
+
+
+@pytest.mark.asyncio
+async def test_court_calibration_member_cannot_create(client, override_principal, db_engine):
+    video_id = await _create_ready_video(client, db_engine)
+
+    from volley_api.core.auth import Principal
+
+    override_principal["value"] = Principal(
+        user_id="member-1", organization_id="org-1", role="member"
+    )
+    resp = await client.post(
+        f"/api/v1/videos/{video_id}/court-calibration",
+        json={
+            "image_width": 900,
+            "image_height": 1800,
+            "keypoints": _exact_scale_corner_keypoints(),
+        },
+    )
+    assert resp.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_court_calibration_is_org_scoped(
+    client, override_principal, other_org_principal, db_engine
+):
+    video_id = await _create_ready_video(client, db_engine)
+
+    override_principal["value"] = other_org_principal
+    resp = await client.post(
+        f"/api/v1/videos/{video_id}/court-calibration",
+        json={
+            "image_width": 900,
+            "image_height": 1800,
+            "keypoints": _exact_scale_corner_keypoints(),
+        },
+    )
+    assert resp.status_code == 404
+
+    get_resp = await client.get(f"/api/v1/videos/{video_id}/court-calibration")
+    assert get_resp.status_code == 404

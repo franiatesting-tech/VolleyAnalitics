@@ -1324,7 +1324,7 @@ wheels = [
 [[package]]
 name = "volley-domain"
 version = "0.1.0"
-source = { directory = "../packages/domain-py" }
+source = { editable = "../packages/domain-py" }
 dependencies = [
     { name = "pydantic" },
     { name = "sqlalchemy" },
@@ -1373,7 +1373,7 @@ requires-dist = [
     { name = "python-multipart", marker = "extra == 'server'", specifier = ">=0.0.9" },
     { name = "rfdetr", marker = "extra == 'inference'", specifier = "==1.9.4" },
     { name = "uvicorn", extras = ["standard"], marker = "extra == 'server'", specifier = ">=0.32" },
-    { name = "volley-domain", directory = "../packages/domain-py" },
+    { name = "volley-domain", editable = "../packages/domain-py" },
 ]
 provides-extras = ["inference", "server"]
 

@@ -9,9 +9,10 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from volley_domain.analysis import RallyAnalysisBundle
+from volley_domain.annotation import COURT_KEYPOINT_NAMES
 from volley_domain.court import Zone
 
 # ---------------------------------------------------------------------------
@@ -604,6 +605,122 @@ class TriggerDetectionRequest(BaseModel):
 class TriggerDetectionResponse(BaseModel):
     pipeline_run_id: str
     status: PipelineRunStatusOut
+
+
+class HomographyMethodOut(StrEnum):
+    automatic = "automatic"
+    manual = "manual"
+    hybrid = "hybrid"
+
+
+class ShotTypeOut(StrEnum):
+    main_wide = "main_wide"
+    endline_wide = "endline_wide"
+    side_wide = "side_wide"
+    closeup = "closeup"
+    replay = "replay"
+    scoreboard = "scoreboard"
+    other = "other"
+
+
+class TacticalUsabilityOut(StrEnum):
+    usable = "usable"
+    not_usable = "not_usable"
+    partial = "partial"
+
+
+class CourtKeypointIn(BaseModel):
+    """One clicked (or explicitly marked-occluded) point from the manual
+    calibration UI. `keypoint_name` must be one of the 10 named
+    intersections `volley_domain.annotation.COURT_KEYPOINT_NAMES` already
+    fixes -- see that module and docs/datasets/PROFESSIONAL_ANNOTATION_PROTOCOL.md's
+    "Court calibration marks" section for the convention this mirrors."""
+
+    keypoint_name: str
+    x_pixel: float = Field(ge=0)
+    y_pixel: float = Field(ge=0)
+    visible: bool = True
+
+
+class CreateCourtCalibrationRequest(BaseModel):
+    """Body for `POST /videos/{id}/court-calibration`. Manual calibration
+    only (CLAUDE.md's fixed Court decision: "a correct manual calibration
+    beats a false automatic one") -- no auto-detection path exists yet.
+    `image_width`/`image_height` must be the exact native pixel frame the
+    keypoints were clicked against (a homography fitted on one frame size
+    is silently wrong by a constant scale factor if applied to another).
+    `net_height_m` is optional and display-only -- see CourtCalibration's
+    own docstring for why it is never used to compute ball height/net
+    clearance."""
+
+    image_width: int = Field(gt=0)
+    image_height: int = Field(gt=0)
+    keypoints: list[CourtKeypointIn] = Field(min_length=4)
+    net_height_m: float | None = Field(default=None, gt=0)
+    court_width_m: float = Field(default=9.0, gt=0)
+    court_length_m: float = Field(default=18.0, gt=0)
+    camera_shot_type: ShotTypeOut = ShotTypeOut.main_wide
+    camera_tactical_usable: TacticalUsabilityOut = TacticalUsabilityOut.usable
+    # Whether the near side's zone 1 (serve position) is on the left or
+    # right as viewed in the frame -- optional, since a calibration is
+    # still fully valid for side/front-back-row without it (see
+    # CourtCalibration's own docstring on why this is never guessed).
+    zone_mirror_x: bool | None = Field(default=None)
+
+    @model_validator(mode="after")
+    def _at_least_four_visible_named_keypoints(self) -> CreateCourtCalibrationRequest:
+        visible = [k for k in self.keypoints if k.visible]
+        if len(visible) < 4:
+            raise ValueError("at least 4 visible, named keypoints are required")
+        unknown = {k.keypoint_name for k in visible} - set(COURT_KEYPOINT_NAMES)
+        if unknown:
+            raise ValueError(f"unknown keypoint names: {sorted(unknown)}")
+        return self
+
+
+class CourtCalibrationPreviewRequest(BaseModel):
+    """Body for `POST /videos/{id}/court-calibration/preview` -- the same
+    keypoint shape as `CreateCourtCalibrationRequest`, minus the fields
+    that don't affect reprojection error, so a live-typing UI can debounce
+    a cheap preview call without persisting anything."""
+
+    image_width: int = Field(gt=0)
+    image_height: int = Field(gt=0)
+    keypoints: list[CourtKeypointIn] = Field(min_length=4)
+
+    @model_validator(mode="after")
+    def _at_least_four_visible_named_keypoints(self) -> CourtCalibrationPreviewRequest:
+        visible = [k for k in self.keypoints if k.visible]
+        if len(visible) < 4:
+            raise ValueError("at least 4 visible, named keypoints are required")
+        unknown = {k.keypoint_name for k in visible} - set(COURT_KEYPOINT_NAMES)
+        if unknown:
+            raise ValueError(f"unknown keypoint names: {sorted(unknown)}")
+        return self
+
+
+class CourtCalibrationPreviewResponse(BaseModel):
+    reprojection_error_px: float
+
+
+class CourtCalibrationOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    camera_segment_id: str
+    method: HomographyMethodOut
+    image_width: int
+    image_height: int
+    homography_matrix: list[float]
+    keypoints: list[dict] | None
+    net_height_m: float | None
+    court_width_m: float
+    court_length_m: float
+    zone_mirror_x: bool | None
+    reprojection_error_px: float | None
+    confidence: float | None
+    created_by_user_id: str | None
+    created_at: datetime
 
 
 class VideoOut(BaseModel):

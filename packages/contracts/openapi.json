@@ -1068,6 +1068,161 @@
         }
       }
     },
+    "/api/v1/videos/{video_id}/court-calibration/preview": {
+      "post": {
+        "tags": [
+          "videos"
+        ],
+        "summary": "Preview Court Calibration",
+        "description": "Debounced live-feedback endpoint for the manual calibration UI --\ncomputes reprojection error for the in-progress keypoint set without\npersisting anything, so a human sees calibration quality *while*\nclicking, not only after submitting. Calls the exact same ml/court/\ngeometry functions the real persisting route below does (never a\nsecond, divergent estimator), so the live number and the saved number\ncan never disagree.",
+        "operationId": "preview_court_calibration_api_v1_videos__video_id__court_calibration_preview_post",
+        "parameters": [
+          {
+            "name": "video_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Video Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CourtCalibrationPreviewRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CourtCalibrationPreviewResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/videos/{video_id}/court-calibration": {
+      "post": {
+        "tags": [
+          "videos"
+        ],
+        "summary": "Create Court Calibration",
+        "description": "Manual calibration only (CLAUDE.md: \"a correct manual calibration\nbeats a false automatic one\") -- no auto-detection path exists yet.\n\nCreates exactly one CameraSegment per video if none exists yet -- a\ndeliberate MVP simplification: no shot-boundary/camera-cut detection\npipeline exists, so this assumes one camera framing for the whole\nvideo. Surfaced to the user as a persistent warning in the calibration\nUI, never silently assumed away. An existing unsuperseded calibration\non that segment is superseded, never overwritten in place or deleted\n-- see CourtCalibration's own docstring on why.",
+        "operationId": "create_court_calibration_api_v1_videos__video_id__court_calibration_post",
+        "parameters": [
+          {
+            "name": "video_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Video Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCourtCalibrationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CourtCalibrationOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "videos"
+        ],
+        "summary": "Get Court Calibration",
+        "description": "Current (non-superseded) calibration for this video, or None if one\nhas never been created -- an honest empty state, never a fabricated\nplaceholder, matching get_video_detection_status's own pattern.",
+        "operationId": "get_court_calibration_api_v1_videos__video_id__court_calibration_get",
+        "parameters": [
+          {
+            "name": "video_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Video Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/CourtCalibrationOut"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Response Get Court Calibration Api V1 Videos  Video Id  Court Calibration Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/storage/local-download/{key}": {
       "get": {
         "tags": [
@@ -1880,6 +2035,285 @@
         "title": "BoundingBox",
         "description": "Normalized (0-1) top-left + width/height -- FiftyOne's own\n`Detection.bounding_box` convention, adopted here directly so the\nto/from-FiftyOne converters below are a straight field mapping rather\nthan a coordinate-system translation."
       },
+      "CourtCalibrationOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "camera_segment_id": {
+            "type": "string",
+            "title": "Camera Segment Id"
+          },
+          "method": {
+            "$ref": "#/components/schemas/HomographyMethodOut"
+          },
+          "image_width": {
+            "type": "integer",
+            "title": "Image Width"
+          },
+          "image_height": {
+            "type": "integer",
+            "title": "Image Height"
+          },
+          "homography_matrix": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Homography Matrix"
+          },
+          "keypoints": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Keypoints"
+          },
+          "net_height_m": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Net Height M"
+          },
+          "court_width_m": {
+            "type": "number",
+            "title": "Court Width M"
+          },
+          "court_length_m": {
+            "type": "number",
+            "title": "Court Length M"
+          },
+          "zone_mirror_x": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Zone Mirror X"
+          },
+          "reprojection_error_px": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reprojection Error Px"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "created_by_user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By User Id"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "camera_segment_id",
+          "method",
+          "image_width",
+          "image_height",
+          "homography_matrix",
+          "keypoints",
+          "net_height_m",
+          "court_width_m",
+          "court_length_m",
+          "zone_mirror_x",
+          "reprojection_error_px",
+          "confidence",
+          "created_by_user_id",
+          "created_at"
+        ],
+        "title": "CourtCalibrationOut"
+      },
+      "CourtCalibrationPreviewRequest": {
+        "properties": {
+          "image_width": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "title": "Image Width"
+          },
+          "image_height": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "title": "Image Height"
+          },
+          "keypoints": {
+            "items": {
+              "$ref": "#/components/schemas/CourtKeypointIn"
+            },
+            "type": "array",
+            "minItems": 4,
+            "title": "Keypoints"
+          }
+        },
+        "type": "object",
+        "required": [
+          "image_width",
+          "image_height",
+          "keypoints"
+        ],
+        "title": "CourtCalibrationPreviewRequest",
+        "description": "Body for `POST /videos/{id}/court-calibration/preview` -- the same\nkeypoint shape as `CreateCourtCalibrationRequest`, minus the fields\nthat don't affect reprojection error, so a live-typing UI can debounce\na cheap preview call without persisting anything."
+      },
+      "CourtCalibrationPreviewResponse": {
+        "properties": {
+          "reprojection_error_px": {
+            "type": "number",
+            "title": "Reprojection Error Px"
+          }
+        },
+        "type": "object",
+        "required": [
+          "reprojection_error_px"
+        ],
+        "title": "CourtCalibrationPreviewResponse"
+      },
+      "CourtKeypointIn": {
+        "properties": {
+          "keypoint_name": {
+            "type": "string",
+            "title": "Keypoint Name"
+          },
+          "x_pixel": {
+            "type": "number",
+            "minimum": 0,
+            "title": "X Pixel"
+          },
+          "y_pixel": {
+            "type": "number",
+            "minimum": 0,
+            "title": "Y Pixel"
+          },
+          "visible": {
+            "type": "boolean",
+            "title": "Visible",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "keypoint_name",
+          "x_pixel",
+          "y_pixel"
+        ],
+        "title": "CourtKeypointIn",
+        "description": "One clicked (or explicitly marked-occluded) point from the manual\ncalibration UI. `keypoint_name` must be one of the 10 named\nintersections `volley_domain.annotation.COURT_KEYPOINT_NAMES` already\nfixes -- see that module and docs/datasets/PROFESSIONAL_ANNOTATION_PROTOCOL.md's\n\"Court calibration marks\" section for the convention this mirrors."
+      },
+      "CreateCourtCalibrationRequest": {
+        "properties": {
+          "image_width": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "title": "Image Width"
+          },
+          "image_height": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "title": "Image Height"
+          },
+          "keypoints": {
+            "items": {
+              "$ref": "#/components/schemas/CourtKeypointIn"
+            },
+            "type": "array",
+            "minItems": 4,
+            "title": "Keypoints"
+          },
+          "net_height_m": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Net Height M"
+          },
+          "court_width_m": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "title": "Court Width M",
+            "default": 9
+          },
+          "court_length_m": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "title": "Court Length M",
+            "default": 18
+          },
+          "camera_shot_type": {
+            "$ref": "#/components/schemas/ShotTypeOut",
+            "default": "main_wide"
+          },
+          "camera_tactical_usable": {
+            "$ref": "#/components/schemas/TacticalUsabilityOut",
+            "default": "usable"
+          },
+          "zone_mirror_x": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Zone Mirror X"
+          }
+        },
+        "type": "object",
+        "required": [
+          "image_width",
+          "image_height",
+          "keypoints"
+        ],
+        "title": "CreateCourtCalibrationRequest",
+        "description": "Body for `POST /videos/{id}/court-calibration`. Manual calibration\nonly (CLAUDE.md's fixed Court decision: \"a correct manual calibration\nbeats a false automatic one\") -- no auto-detection path exists yet.\n`image_width`/`image_height` must be the exact native pixel frame the\nkeypoints were clicked against (a homography fitted on one frame size\nis silently wrong by a constant scale factor if applied to another).\n`net_height_m` is optional and display-only -- see CourtCalibration's\nown docstring for why it is never used to compute ball height/net\nclearance."
+      },
       "DetectionBoxOut": {
         "properties": {
           "candidate_id": {
@@ -1986,6 +2420,15 @@
         },
         "type": "object",
         "title": "HTTPValidationError"
+      },
+      "HomographyMethodOut": {
+        "type": "string",
+        "enum": [
+          "automatic",
+          "manual",
+          "hybrid"
+        ],
+        "title": "HomographyMethodOut"
       },
       "JobStatus": {
         "type": "string",
@@ -3046,6 +3489,19 @@
         ],
         "title": "SetterDistributionEntryOut"
       },
+      "ShotTypeOut": {
+        "type": "string",
+        "enum": [
+          "main_wide",
+          "endline_wide",
+          "side_wide",
+          "closeup",
+          "replay",
+          "scoreboard",
+          "other"
+        ],
+        "title": "ShotTypeOut"
+      },
       "SideoutBreakpointStatsOut": {
         "properties": {
           "team_id": {
@@ -3663,6 +4119,15 @@
           "winner"
         ],
         "title": "SyntheticSetScore"
+      },
+      "TacticalUsabilityOut": {
+        "type": "string",
+        "enum": [
+          "usable",
+          "not_usable",
+          "partial"
+        ],
+        "title": "TacticalUsabilityOut"
       },
       "TeamRoster": {
         "properties": {

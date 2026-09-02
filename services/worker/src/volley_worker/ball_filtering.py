@@ -53,6 +53,45 @@ def _detection_center(bbox: dict[str, float]) -> tuple[float, float]:
     return (bbox["x"] + bbox["width"] / 2, bbox["y"] + bbox["height"] / 2)
 
 
+_DEFAULT_BURST_WINDOW_RADIUS_SECONDS = 0.6
+_DEFAULT_BURST_MAX_WINDOWS = 40
+
+
+def compute_burst_windows(
+    real_ball_timestamps: list[float],
+    *,
+    window_radius_seconds: float = _DEFAULT_BURST_WINDOW_RADIUS_SECONDS,
+    max_windows: int = _DEFAULT_BURST_MAX_WINDOWS,
+) -> tuple[list[tuple[float, float]], int]:
+    """Expands each real (non-static-false-positive) ball sighting timestamp
+    to `[t - window_radius_seconds, t + window_radius_seconds]` (clamped to
+    a non-negative start), merges overlapping/adjacent windows via a
+    standard sort-and-sweep interval merge, and truncates to `max_windows`
+    in chronological order if there are more than that -- returns
+    `(windows, windows_dropped_count)` so a caller can honestly record
+    truncation (see detection.py's burst re-sampling phase) rather than
+    silently dropping coverage for an unusually rally-dense video.
+    """
+    if not real_ball_timestamps:
+        return [], 0
+
+    raw_windows = sorted(
+        (max(0.0, t - window_radius_seconds), t + window_radius_seconds)
+        for t in real_ball_timestamps
+    )
+
+    merged: list[tuple[float, float]] = []
+    for start, end in raw_windows:
+        if merged and start <= merged[-1][1]:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], end))
+        else:
+            merged.append((start, end))
+
+    if len(merged) > max_windows:
+        return merged[:max_windows], len(merged) - max_windows
+    return merged, 0
+
+
 def find_static_false_positive_ids(
     detections: list[tuple[float, dict]],
     *,

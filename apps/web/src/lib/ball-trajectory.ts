@@ -96,21 +96,100 @@ export function interpolatedBoxes<
 // on its parent VideoDetectionFrame.
 export type TimedBall = { timestampSeconds: number; bbox: Bbox; confidence: number };
 
+// A 3x3 row-major homography (9 floats), exactly CourtCalibrationOut's own
+// `homography_matrix` shape -- maps image pixel coordinates to court-plane
+// meters. Only the *apply* side lives here: fitting one from clicked
+// keypoints is deliberately server-side, authoritative Python math (see
+// ml/court/geometry.py's estimate_homography and this repo's court
+// calibration plan) -- duplicating that numerically subtle DLT/SVD
+// estimator in TypeScript would risk two implementations silently
+// disagreeing. Applying an already-fitted homography, in contrast, is a
+// trivial 3x3 matrix-vector multiply + perspective divide -- the same
+// complexity class as this file's other hand-ported rendering math.
+export type Homography = number[];
+
+export function applyHomography([x, y]: [number, number], h: Homography): [number, number] {
+  const w = h[6] * x + h[7] * y + h[8];
+  if (Math.abs(w) < 1e-12) throw new Error("homography maps point to infinity");
+  return [(h[0] * x + h[1] * y + h[2]) / w, (h[3] * x + h[4] * y + h[5]) / w];
+}
+
+export type CourtCalibrationForProjection = {
+  homography_matrix: Homography;
+  image_width: number;
+  image_height: number;
+};
+
+// A ball sighting's bbox center is stored in normalized [0,1] image-space
+// (see toBbox) -- a calibration's homography was fitted against native
+// pixel coordinates (CourtCalibrationOut.image_width/height), so the
+// normalized center has to be scaled back up to pixels before projecting.
+export function ballSightingToCourtMeters(
+  sighting: TimedBall,
+  calibration: CourtCalibrationForProjection,
+): [number, number] {
+  const [cx, cy] = bboxCenter(sighting.bbox);
+  return applyHomography(
+    [cx * calibration.image_width, cy * calibration.image_height],
+    calibration.homography_matrix,
+  );
+}
+
 // Two real ball sightings this close together in time, and this close
-// together in normalized position, are plausibly the same ball in
-// continuous flight -- a genuinely fast spike/serve can still cross a
-// meaningful fraction of the frame between two sparse samples, so this
-// stays generous rather than narrowly tuned. Both bounds are unvalidated
-// against real footage (same caveat as this project's other new
-// heuristics, e.g. ball_plausibility.py's color/shape gate) -- re-tune
-// once real footage confirms typical intra-rally detection gaps and real
-// ball speeds in frame-normalized units. This is what stands between
-// "recreate the real trajectory" and silently drawing a straight line
-// across dead time between two rallies -- CLAUDE.md's own ball
-// provenance rule ("never present interpolation as observation") applies
-// exactly here.
+// together in position, are plausibly the same ball in continuous flight
+// -- a genuinely fast spike/serve can still cross a meaningful distance
+// between two sparse samples, so this stays generous rather than narrowly
+// tuned. This is what stands between "recreate the real trajectory" and
+// silently drawing a straight line across dead time between two rallies
+// -- CLAUDE.md's own ball provenance rule ("never present interpolation
+// as observation") applies exactly here.
 export const MAX_BALL_LINK_GAP_SECONDS = 1.5;
-export const MAX_BALL_LINK_SPEED_PER_SECOND = 1.5; // normalized frame-diagonals/second
+// Fallback speed bound in normalized frame-diagonals/second, used only
+// when no court calibration exists yet (see MAX_BALL_LINK_SPEED_MPS
+// below for the real-unit bound used once one does). Lowered from an
+// original, unvalidated 1.5 after checking real persisted detections from
+// a real 84-minute match: the diagnosed bad links (a detector locking
+// onto a static scene object, then jumping back to a real ball position)
+// measured 0.6-0.68 diagonal-units/second, and the old 1.5 bound accepted
+// every one of them as "plausible." 0.5 rejects those specific real bad
+// jumps while still allowing a fast spike to cross half the visible frame
+// in one second -- evidence-informed, but still a heuristic pending a
+// fresh real run to re-validate against.
+export const MAX_BALL_LINK_SPEED_PER_SECOND = 0.5;
+// The fastest volleyball hit ever officially recorded by FIVB: Wilfredo
+// Leon's 135.6 km/h (37.7 m/s) serve, 2021 Volleyball Nations League --
+// https://en.volleyballworld.com/volleyball/competitions/volleyball-nations-league/2021/news/leon-demolishes-vnl-serving-record.
+// A plausibility gate needs headroom above the fastest ball ever really
+// measured, not a bound sitting right at it (detection-center jitter,
+// ball-flight angle relative to the camera, and the ball's own diameter
+// all add real-but-legitimate noise) -- 40 m/s clears that record with
+// room to spare while still rejecting an implausible teleport.
+export const MAX_BALL_LINK_SPEED_MPS = 40;
+
+export function isPlausibleBallLink(
+  a: TimedBall,
+  b: TimedBall,
+  calibration?: CourtCalibrationForProjection,
+): boolean {
+  const gap = b.timestampSeconds - a.timestampSeconds;
+  if (gap <= 0 || gap > MAX_BALL_LINK_GAP_SECONDS) return false;
+  if (calibration) {
+    try {
+      const [ax, ay] = ballSightingToCourtMeters(a, calibration);
+      const [bx, by] = ballSightingToCourtMeters(b, calibration);
+      return Math.hypot(bx - ax, by - ay) / gap <= MAX_BALL_LINK_SPEED_MPS;
+    } catch {
+      // A degenerate point (homography maps it to infinity) falls
+      // through to the normalized-space heuristic below rather than
+      // crashing the overlay over one bad sample.
+    }
+  }
+  const [ax, ay] = bboxCenter(a.bbox);
+  const [bx, by] = bboxCenter(b.bbox);
+  const distance = Math.hypot(bx - ax, by - ay);
+  return distance / gap <= MAX_BALL_LINK_SPEED_PER_SECOND;
+}
+
 // How long to keep showing the single most recent real sighting when no
 // plausible next sighting exists yet -- a brief hold right after a real
 // detection, never a frozen marker persisting through a genuine gap.
@@ -120,15 +199,6 @@ export const MAX_BALL_HOLD_SECONDS = 0.4;
 // enough to never span across a rally boundary in practice given
 // MAX_BALL_LINK_GAP_SECONDS above.
 export const BALL_TRAIL_WINDOW_SECONDS = 2.0;
-
-export function isPlausibleBallLink(a: TimedBall, b: TimedBall): boolean {
-  const gap = b.timestampSeconds - a.timestampSeconds;
-  if (gap <= 0 || gap > MAX_BALL_LINK_GAP_SECONDS) return false;
-  const [ax, ay] = bboxCenter(a.bbox);
-  const [bx, by] = bboxCenter(b.bbox);
-  const distance = Math.hypot(bx - ax, by - ay);
-  return distance / gap <= MAX_BALL_LINK_SPEED_PER_SECOND;
-}
 
 // Flattens every real (non-static-false-positive) ball sighting across
 // every sampled frame into time order -- the base data both the trailing
@@ -156,6 +226,7 @@ export function allRealBallSightings(frames: VideoDetectionFrame[]): TimedBall[]
 export function liveBallPosition(
   sightings: TimedBall[],
   currentTime: number,
+  calibration?: CourtCalibrationForProjection,
 ): { bbox: Bbox; confidence: number } | null {
   let prev: TimedBall | null = null;
   let next: TimedBall | null = null;
@@ -166,7 +237,7 @@ export function liveBallPosition(
       if (!next || sighting.timestampSeconds < next.timestampSeconds) next = sighting;
     }
   }
-  if (prev && next && isPlausibleBallLink(prev, next)) {
+  if (prev && next && isPlausibleBallLink(prev, next, calibration)) {
     const span = next.timestampSeconds - prev.timestampSeconds;
     const t = span > 0 ? (currentTime - prev.timestampSeconds) / span : 0;
     return {
@@ -191,6 +262,7 @@ export function recentBallTrailRuns(
   sightings: TimedBall[],
   currentTime: number,
   windowSeconds: number,
+  calibration?: CourtCalibrationForProjection,
 ): TimedBall[][] {
   const inWindow = sightings.filter(
     (sighting) =>
@@ -200,7 +272,10 @@ export function recentBallTrailRuns(
   const runs: TimedBall[][] = [];
   for (const sighting of inWindow) {
     const currentRun = runs[runs.length - 1];
-    if (currentRun && isPlausibleBallLink(currentRun[currentRun.length - 1], sighting)) {
+    if (
+      currentRun &&
+      isPlausibleBallLink(currentRun[currentRun.length - 1], sighting, calibration)
+    ) {
       currentRun.push(sighting);
     } else {
       runs.push([sighting]);

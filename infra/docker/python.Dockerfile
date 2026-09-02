@@ -18,6 +18,12 @@ COPY packages/domain-py packages/domain-py
 COPY packages/storage-py packages/storage-py
 COPY services/api services/api
 COPY services/worker services/worker
+# services/api depends on volley-ml's BASE package (pure numpy homography
+# math, see ml/pyproject.toml) for the court-calibration routes -- ml/'s
+# own `inference`/`server` extras (rfdetr/torch/fastapi) are never
+# requested here, so this stays a small source-only copy, not a reason to
+# pull the heavy CV stack into this image.
+COPY ml ml
 
 RUN uv sync --all-packages --no-dev --frozen
 

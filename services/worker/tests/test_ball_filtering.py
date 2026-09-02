@@ -1,4 +1,4 @@
-from volley_worker.ball_filtering import find_static_false_positive_ids
+from volley_worker.ball_filtering import compute_burst_windows, find_static_false_positive_ids
 
 
 def _det(candidate_id: str, x: float, y: float, w: float = 0.013, h: float = 0.02) -> dict:
@@ -62,3 +62,39 @@ def test_two_detections_just_outside_the_radius_are_not_clustered():
 
 def test_empty_input_returns_empty_set():
     assert find_static_false_positive_ids([]) == set()
+
+
+def test_compute_burst_windows_single_sighting_gives_one_window():
+    windows, dropped = compute_burst_windows([10.0], window_radius_seconds=0.6)
+    assert windows == [(9.4, 10.6)]
+    assert dropped == 0
+
+
+def test_compute_burst_windows_merges_overlapping_sightings():
+    windows, dropped = compute_burst_windows([10.0, 10.5], window_radius_seconds=0.6)
+    assert windows == [(9.4, 11.1)]
+    assert dropped == 0
+
+
+def test_compute_burst_windows_keeps_far_apart_sightings_separate():
+    windows, dropped = compute_burst_windows([10.0, 30.0], window_radius_seconds=0.6)
+    assert windows == [(9.4, 10.6), (29.4, 30.6)]
+    assert dropped == 0
+
+
+def test_compute_burst_windows_clamps_a_start_near_zero():
+    windows, _dropped = compute_burst_windows([0.2], window_radius_seconds=0.6)
+    assert windows == [(0.0, 0.8)]
+
+
+def test_compute_burst_windows_truncates_and_reports_dropped_count():
+    timestamps = [float(t * 10) for t in range(5)]  # 0, 10, 20, 30, 40 -- 5 far-apart windows
+    windows, dropped = compute_burst_windows(timestamps, window_radius_seconds=0.6, max_windows=3)
+    assert len(windows) == 3
+    assert dropped == 2
+    # Chronologically first windows are kept.
+    assert windows[0][0] < windows[1][0] < windows[2][0]
+
+
+def test_compute_burst_windows_empty_input_returns_no_windows():
+    assert compute_burst_windows([]) == ([], 0)

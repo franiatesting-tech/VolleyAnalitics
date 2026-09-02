@@ -9,6 +9,7 @@ import {
   Expand,
   Info,
   Loader2,
+  Ruler,
   ScanSearch,
   ShieldAlert,
   Sparkles,
@@ -19,10 +20,12 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { CourtTopDownView } from "@/components/videos/court-top-down-view";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
+  useCourtCalibration,
   useDetections,
   useDetectionStatus,
   usePlaybackUrl,
@@ -57,6 +60,8 @@ export default function VideoDetailPage({ params }: { params: Promise<{ id: stri
     isReady && detectionStatusQuery.data?.status === "completed",
   );
   const triggerDetection = useTriggerDetection(id);
+  const calibrationQuery = useCourtCalibration(id, isReady);
+  const calibration = calibrationQuery.data ?? undefined;
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -125,7 +130,12 @@ export default function VideoDetailPage({ params }: { params: Promise<{ id: stri
     // between rallies), never bridged with a drawn line. Fades toward the
     // oldest point so the trail reads as "recent history," not a static
     // diagram.
-    for (const run of recentBallTrailRuns(realBallSightings, time, BALL_TRAIL_WINDOW_SECONDS)) {
+    for (const run of recentBallTrailRuns(
+      realBallSightings,
+      time,
+      BALL_TRAIL_WINDOW_SECONDS,
+      calibration,
+    )) {
       if (run.length < 2) continue;
       ctx.lineWidth = 2;
       for (let i = 1; i < run.length; i++) {
@@ -141,7 +151,7 @@ export default function VideoDetailPage({ params }: { params: Promise<{ id: stri
       }
     }
 
-    const liveBall = liveBallPosition(realBallSightings, time);
+    const liveBall = liveBallPosition(realBallSightings, time, calibration);
     if (liveBall) {
       const { bbox, confidence } = liveBall;
       const cx = (bbox.x + bbox.width / 2) * displayWidth;
@@ -160,7 +170,7 @@ export default function VideoDetailPage({ params }: { params: Promise<{ id: stri
       ctx.fillStyle = "#0a1423";
       ctx.fillText(label, cx - textWidth / 2, cy - radius - 4);
     }
-  }, [frames, realBallSightings]);
+  }, [frames, realBallSightings, calibration]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -501,6 +511,102 @@ export default function VideoDetailPage({ params }: { params: Promise<{ id: stri
 
             <Card>
               <CardHeader>
+                <div className="flex items-center justify-between gap-3">
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <Ruler className="size-4 text-muted-foreground" />
+                    Court calibration
+                  </CardTitle>
+                  {calibration ? (
+                    <Badge
+                      variant={
+                        calibration.reprojection_error_px != null &&
+                        calibration.reprojection_error_px > 3
+                          ? "destructive"
+                          : "secondary"
+                      }
+                    >
+                      {calibration.reprojection_error_px != null
+                        ? `${calibration.reprojection_error_px.toFixed(1)}px error`
+                        : "manual"}
+                    </Badge>
+                  ) : null}
+                </div>
+              </CardHeader>
+              <CardContent className="flex flex-col gap-3">
+                {calibrationQuery.isPending ? (
+                  <Skeleton className="h-16 w-full" />
+                ) : calibration ? (
+                  <>
+                    <dl className="grid grid-cols-2 gap-y-1.5 text-xs">
+                      <dt className="text-muted-foreground">Court size</dt>
+                      <dd className="text-right font-mono text-foreground">
+                        {calibration.court_width_m}m × {calibration.court_length_m}m
+                      </dd>
+                      <dt className="text-muted-foreground">Net height</dt>
+                      <dd className="text-right font-mono text-foreground">
+                        {calibration.net_height_m != null ? `${calibration.net_height_m}m` : "—"}
+                      </dd>
+                    </dl>
+                    {calibration.reprojection_error_px != null &&
+                    calibration.reprojection_error_px > 3 ? (
+                      <Alert variant="destructive">
+                        <AlertCircle />
+                        <AlertDescription className="text-xs leading-5">
+                          Reprojection error is above the 3px review threshold — court-relative
+                          positions and real-unit ball speeds from this calibration should be
+                          treated as approximate, not precise.
+                        </AlertDescription>
+                      </Alert>
+                    ) : null}
+                    <p className="text-xs leading-5 text-muted-foreground">
+                      Applies to the whole video, assuming the camera framing never changes. A cut
+                      to another angle, a replay, or a closeup will silently produce wrong
+                      positions for that span.
+                    </p>
+                    <Link
+                      href={`/videos/${id}/calibrate`}
+                      className="text-xs font-medium text-accent hover:underline"
+                    >
+                      Recalibrate
+                    </Link>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-border py-6 text-center">
+                      <Ruler className="size-6 text-muted-foreground" />
+                      <p className="max-w-xs text-xs leading-5 text-muted-foreground">
+                        No court calibration exists for this video yet — real court-relative
+                        positions, ball speeds and net-height display all require one. Manual
+                        calibration only; nothing is auto-detected.
+                      </p>
+                    </div>
+                    <Link href={`/videos/${id}/calibrate`}>
+                      <Button variant="outline" className="w-full">
+                        <Ruler />
+                        Calibrate court
+                      </Button>
+                    </Link>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+
+            {calibration ? (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <Ruler className="size-4 text-muted-foreground" />
+                    Top-down positions
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <CourtTopDownView frame={currentFrame} calibration={calibration} />
+                </CardContent>
+              </Card>
+            ) : null}
+
+            <Card>
+              <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-base">
                   <Users className="size-4 text-muted-foreground" />
                   Rally & scoring log
@@ -512,9 +618,8 @@ export default function VideoDetailPage({ params }: { params: Promise<{ id: stri
                   <p className="max-w-xs text-xs leading-5 text-muted-foreground">
                     No verified rally, action or scoring data exists for this video yet. Real
                     per-play statistics require the reviewed-label event engine (rally
-                    segmentation, contacts, outcomes) and a working court calibration (needed to
-                    turn a ball&apos;s pixel position into a real trajectory against real court/net
-                    dimensions) — neither exists yet. Nothing is fabricated here.
+                    segmentation, contacts, outcomes) — that still doesn&apos;t exist, calibration
+                    or not. Nothing is fabricated here.
                   </p>
                 </div>
               </CardContent>

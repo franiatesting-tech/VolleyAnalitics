@@ -20,16 +20,23 @@ import re
 import tempfile
 from pathlib import Path
 
+import numpy as np
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from volley_domain.base import utcnow
 from volley_domain.models import Match
 from volley_domain.ontology import (
+    CameraSegment,
+    CourtCalibration,
+    HomographyMethod,
     ModelRun,
     ModelRunStage,
     PipelineRun,
     PipelineRunStatus,
+    ShotType,
+    TacticalUsability,
     Video,
     VideoAsset,
     VideoAssetKind,
@@ -38,6 +45,11 @@ from volley_domain.ontology import (
 )
 from volley_domain.schemas import (
     BallDetectionBoxOut,
+    CourtCalibrationOut,
+    CourtCalibrationPreviewRequest,
+    CourtCalibrationPreviewResponse,
+    CourtKeypointIn,
+    CreateCourtCalibrationRequest,
     DetectionBoxOut,
     DownloadTargetOut,
     PipelineRunStatusOut,
@@ -52,6 +64,8 @@ from volley_domain.schemas import (
     VideoUploadResponse,
 )
 from volley_domain.tasks import DETECTION_PIPELINE_VERSION
+from volley_ml.court.geometry import estimate_homography, homography_reprojection_errors
+from volley_ml.court.keypoints import COURT_KEYPOINT_WORLD_POSITIONS_M
 
 from volley_api.core.auth import Principal, get_current_principal, require_org_roles
 from volley_api.core.config import get_settings
@@ -574,7 +588,11 @@ async def get_video_detection_status(
         pipeline_run_id=pipeline_run.id,
         status=PipelineRunStatusOut(pipeline_run.status.value),
         model_version=model_run.model_version if model_run else None,
-        sample_fps=(model_run.metrics or {}).get("sample_fps") if model_run else None,
+        # "base_sample_fps" -- the baseline rate the worker's own burst
+        # re-sampling phase may locally exceed around a real ball sighting
+        # (see volley_worker.detection's docstring); this status field
+        # reports the baseline, not a fabricated blended average.
+        sample_fps=(model_run.metrics or {}).get("base_sample_fps") if model_run else None,
         frames_detected=frames_detected,
         frames_total=(model_run.metrics or {}).get("frames_total") if model_run else None,
         error=pipeline_run.error,
@@ -623,6 +641,159 @@ async def list_video_detections(
         )
         for frame in frames
     ]
+
+
+def _visible_keypoint_correspondences(
+    keypoints: list[CourtKeypointIn],
+) -> tuple[np.ndarray, np.ndarray]:
+    visible = [k for k in keypoints if k.visible]
+    source_xy = np.array([(k.x_pixel, k.y_pixel) for k in visible], dtype=np.float64)
+    target_xy = np.array(
+        [COURT_KEYPOINT_WORLD_POSITIONS_M[k.keypoint_name] for k in visible], dtype=np.float64
+    )
+    return source_xy, target_xy
+
+
+@router.post(
+    "/videos/{video_id}/court-calibration/preview", response_model=CourtCalibrationPreviewResponse
+)
+async def preview_court_calibration(
+    video_id: str,
+    body: CourtCalibrationPreviewRequest,
+    principal: Principal = Depends(require_org_roles("owner", "admin")),
+    db: AsyncSession = Depends(get_db),
+) -> CourtCalibrationPreviewResponse:
+    """Debounced live-feedback endpoint for the manual calibration UI --
+    computes reprojection error for the in-progress keypoint set without
+    persisting anything, so a human sees calibration quality *while*
+    clicking, not only after submitting. Calls the exact same ml/court/
+    geometry functions the real persisting route below does (never a
+    second, divergent estimator), so the live number and the saved number
+    can never disagree."""
+    await _get_org_scoped_video(video_id, principal, db)
+    source_xy, target_xy = _visible_keypoint_correspondences(body.keypoints)
+    try:
+        homography = estimate_homography(source_xy, target_xy)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        ) from exc
+    errors = homography_reprojection_errors(source_xy, target_xy, homography)
+    return CourtCalibrationPreviewResponse(reprojection_error_px=float(np.mean(errors)))
+
+
+@router.post(
+    "/videos/{video_id}/court-calibration",
+    response_model=CourtCalibrationOut,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_court_calibration(
+    video_id: str,
+    body: CreateCourtCalibrationRequest,
+    principal: Principal = Depends(require_org_roles("owner", "admin")),
+    db: AsyncSession = Depends(get_db),
+) -> CourtCalibration:
+    """Manual calibration only (CLAUDE.md: "a correct manual calibration
+    beats a false automatic one") -- no auto-detection path exists yet.
+
+    Creates exactly one CameraSegment per video if none exists yet -- a
+    deliberate MVP simplification: no shot-boundary/camera-cut detection
+    pipeline exists, so this assumes one camera framing for the whole
+    video. Surfaced to the user as a persistent warning in the calibration
+    UI, never silently assumed away. An existing unsuperseded calibration
+    on that segment is superseded, never overwritten in place or deleted
+    -- see CourtCalibration's own docstring on why."""
+    video = await _get_org_scoped_video(video_id, principal, db)
+    if video.status != VideoStatus.READY:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Video is not ready for calibration (status={video.status.value})",
+        )
+
+    segment_result = await db.execute(
+        select(CameraSegment)
+        .where(CameraSegment.video_id == video.id)
+        .order_by(CameraSegment.index_in_video)
+    )
+    segment = segment_result.scalars().first()
+    if segment is None:
+        segment = CameraSegment(
+            video_id=video.id,
+            index_in_video=0,
+            video_t_start=0.0,
+            video_t_end=None,
+            shot_type=ShotType(body.camera_shot_type.value),
+            tactical_usable=TacticalUsability(body.camera_tactical_usable.value),
+        )
+        db.add(segment)
+        await db.flush()
+
+    source_xy, target_xy = _visible_keypoint_correspondences(body.keypoints)
+    try:
+        homography = estimate_homography(source_xy, target_xy)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        ) from exc
+    errors = homography_reprojection_errors(source_xy, target_xy, homography)
+
+    existing_result = await db.execute(
+        select(CourtCalibration).where(
+            CourtCalibration.camera_segment_id == segment.id,
+            CourtCalibration.superseded_at.is_(None),
+        )
+    )
+    for existing in existing_result.scalars().all():
+        existing.superseded_at = utcnow()
+
+    calibration = CourtCalibration(
+        camera_segment_id=segment.id,
+        method=HomographyMethod.MANUAL,
+        image_width=body.image_width,
+        image_height=body.image_height,
+        homography_matrix=homography.flatten().tolist(),
+        keypoints=[k.model_dump() for k in body.keypoints],
+        net_height_m=body.net_height_m,
+        court_width_m=body.court_width_m,
+        court_length_m=body.court_length_m,
+        zone_mirror_x=body.zone_mirror_x,
+        reprojection_error_px=float(np.mean(errors)),
+        confidence=None,
+        created_by_user_id=principal.user_id,
+        supports_metric_3d=False,
+        camera_matrix=None,
+        rotation_world_to_camera=None,
+        translation_world_to_camera_m=None,
+    )
+    db.add(calibration)
+    await db.commit()
+    await db.refresh(calibration)
+    logger.info(
+        "court_calibration_created",
+        video_id=video_id,
+        camera_segment_id=segment.id,
+        reprojection_error_px=calibration.reprojection_error_px,
+    )
+    return calibration
+
+
+@router.get("/videos/{video_id}/court-calibration", response_model=CourtCalibrationOut | None)
+async def get_court_calibration(
+    video_id: str,
+    principal: Principal = Depends(get_current_principal),
+    db: AsyncSession = Depends(get_db),
+) -> CourtCalibration | None:
+    """Current (non-superseded) calibration for this video, or None if one
+    has never been created -- an honest empty state, never a fabricated
+    placeholder, matching get_video_detection_status's own pattern."""
+    video = await _get_org_scoped_video(video_id, principal, db)
+    result = await db.execute(
+        select(CourtCalibration)
+        .join(CameraSegment, CourtCalibration.camera_segment_id == CameraSegment.id)
+        .where(CameraSegment.video_id == video.id, CourtCalibration.superseded_at.is_(None))
+        .order_by(CourtCalibration.created_at.desc())
+    )
+    return result.scalars().first()
 
 
 @router.get("/storage/local-download/{key:path}")

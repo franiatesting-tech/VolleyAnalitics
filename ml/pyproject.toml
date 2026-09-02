@@ -25,7 +25,13 @@ server = [
 ]
 
 [tool.uv.sources]
-volley-domain = { path = "../packages/domain-py" }
+# editable = true: matches how the root workspace's own members resolve
+# volley-domain (implicitly editable) -- services/api now depends on
+# volley-ml too (see its pyproject.toml), and uv's resolver refuses to
+# unify an editable and a non-editable source for the same package across
+# that combined graph ("conflicting URLs for package volley-domain",
+# verified directly).
+volley-domain = { path = "../packages/domain-py", editable = true }
 
 [build-system]
 requires = ["hatchling"]

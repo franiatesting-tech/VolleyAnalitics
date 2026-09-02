@@ -464,6 +464,67 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/videos/{video_id}/court-calibration/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview Court Calibration
+         * @description Debounced live-feedback endpoint for the manual calibration UI --
+         *     computes reprojection error for the in-progress keypoint set without
+         *     persisting anything, so a human sees calibration quality *while*
+         *     clicking, not only after submitting. Calls the exact same ml/court/
+         *     geometry functions the real persisting route below does (never a
+         *     second, divergent estimator), so the live number and the saved number
+         *     can never disagree.
+         */
+        post: operations["preview_court_calibration_api_v1_videos__video_id__court_calibration_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/videos/{video_id}/court-calibration": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Court Calibration
+         * @description Current (non-superseded) calibration for this video, or None if one
+         *     has never been created -- an honest empty state, never a fabricated
+         *     placeholder, matching get_video_detection_status's own pattern.
+         */
+        get: operations["get_court_calibration_api_v1_videos__video_id__court_calibration_get"];
+        put?: never;
+        /**
+         * Create Court Calibration
+         * @description Manual calibration only (CLAUDE.md: "a correct manual calibration
+         *     beats a false automatic one") -- no auto-detection path exists yet.
+         *
+         *     Creates exactly one CameraSegment per video if none exists yet -- a
+         *     deliberate MVP simplification: no shot-boundary/camera-cut detection
+         *     pipeline exists, so this assumes one camera framing for the whole
+         *     video. Surfaced to the user as a persistent warning in the calibration
+         *     UI, never silently assumed away. An existing unsuperseded calibration
+         *     on that segment is superseded, never overwritten in place or deleted
+         *     -- see CourtCalibration's own docstring on why.
+         */
+        post: operations["create_court_calibration_api_v1_videos__video_id__court_calibration_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/storage/local-download/{key}": {
         parameters: {
             query?: never;
@@ -762,6 +823,122 @@ export interface components {
             /** Height */
             height: number;
         };
+        /** CourtCalibrationOut */
+        CourtCalibrationOut: {
+            /** Id */
+            id: string;
+            /** Camera Segment Id */
+            camera_segment_id: string;
+            method: components["schemas"]["HomographyMethodOut"];
+            /** Image Width */
+            image_width: number;
+            /** Image Height */
+            image_height: number;
+            /** Homography Matrix */
+            homography_matrix: number[];
+            /** Keypoints */
+            keypoints: {
+                [key: string]: unknown;
+            }[] | null;
+            /** Net Height M */
+            net_height_m: number | null;
+            /** Court Width M */
+            court_width_m: number;
+            /** Court Length M */
+            court_length_m: number;
+            /** Zone Mirror X */
+            zone_mirror_x: boolean | null;
+            /** Reprojection Error Px */
+            reprojection_error_px: number | null;
+            /** Confidence */
+            confidence: number | null;
+            /** Created By User Id */
+            created_by_user_id: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /**
+         * CourtCalibrationPreviewRequest
+         * @description Body for `POST /videos/{id}/court-calibration/preview` -- the same
+         *     keypoint shape as `CreateCourtCalibrationRequest`, minus the fields
+         *     that don't affect reprojection error, so a live-typing UI can debounce
+         *     a cheap preview call without persisting anything.
+         */
+        CourtCalibrationPreviewRequest: {
+            /** Image Width */
+            image_width: number;
+            /** Image Height */
+            image_height: number;
+            /** Keypoints */
+            keypoints: components["schemas"]["CourtKeypointIn"][];
+        };
+        /** CourtCalibrationPreviewResponse */
+        CourtCalibrationPreviewResponse: {
+            /** Reprojection Error Px */
+            reprojection_error_px: number;
+        };
+        /**
+         * CourtKeypointIn
+         * @description One clicked (or explicitly marked-occluded) point from the manual
+         *     calibration UI. `keypoint_name` must be one of the 10 named
+         *     intersections `volley_domain.annotation.COURT_KEYPOINT_NAMES` already
+         *     fixes -- see that module and docs/datasets/PROFESSIONAL_ANNOTATION_PROTOCOL.md's
+         *     "Court calibration marks" section for the convention this mirrors.
+         */
+        CourtKeypointIn: {
+            /** Keypoint Name */
+            keypoint_name: string;
+            /** X Pixel */
+            x_pixel: number;
+            /** Y Pixel */
+            y_pixel: number;
+            /**
+             * Visible
+             * @default true
+             */
+            visible: boolean;
+        };
+        /**
+         * CreateCourtCalibrationRequest
+         * @description Body for `POST /videos/{id}/court-calibration`. Manual calibration
+         *     only (CLAUDE.md's fixed Court decision: "a correct manual calibration
+         *     beats a false automatic one") -- no auto-detection path exists yet.
+         *     `image_width`/`image_height` must be the exact native pixel frame the
+         *     keypoints were clicked against (a homography fitted on one frame size
+         *     is silently wrong by a constant scale factor if applied to another).
+         *     `net_height_m` is optional and display-only -- see CourtCalibration's
+         *     own docstring for why it is never used to compute ball height/net
+         *     clearance.
+         */
+        CreateCourtCalibrationRequest: {
+            /** Image Width */
+            image_width: number;
+            /** Image Height */
+            image_height: number;
+            /** Keypoints */
+            keypoints: components["schemas"]["CourtKeypointIn"][];
+            /** Net Height M */
+            net_height_m?: number | null;
+            /**
+             * Court Width M
+             * @default 9
+             */
+            court_width_m: number;
+            /**
+             * Court Length M
+             * @default 18
+             */
+            court_length_m: number;
+            /** @default main_wide */
+            camera_shot_type: components["schemas"]["ShotTypeOut"];
+            /** @default usable */
+            camera_tactical_usable: components["schemas"]["TacticalUsabilityOut"];
+            /** Zone Mirror X */
+            zone_mirror_x?: boolean | null;
+        };
         /**
          * DetectionBoxOut
          * @description One box within a `VideoDetectionFrameOut`'s `detections` list --
@@ -828,6 +1005,11 @@ export interface components {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
+        /**
+         * HomographyMethodOut
+         * @enum {string}
+         */
+        HomographyMethodOut: "automatic" | "manual" | "hybrid";
         /**
          * JobStatus
          * @enum {string}
@@ -1200,6 +1382,11 @@ export interface components {
                 [key: string]: number;
             };
         };
+        /**
+         * ShotTypeOut
+         * @enum {string}
+         */
+        ShotTypeOut: "main_wide" | "endline_wide" | "side_wide" | "closeup" | "replay" | "scoreboard" | "other";
         /** SideoutBreakpointStatsOut */
         SideoutBreakpointStatsOut: {
             /** Team Id */
@@ -1407,6 +1594,11 @@ export interface components {
              */
             winner: "home" | "away";
         };
+        /**
+         * TacticalUsabilityOut
+         * @enum {string}
+         */
+        TacticalUsabilityOut: "usable" | "not_usable" | "partial";
         /** TeamRoster */
         TeamRoster: {
             /** Team Name */
@@ -2353,6 +2545,107 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["VideoDetectionFrameOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_court_calibration_api_v1_videos__video_id__court_calibration_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                video_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CourtCalibrationPreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CourtCalibrationPreviewResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_court_calibration_api_v1_videos__video_id__court_calibration_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                video_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CourtCalibrationOut"] | null;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_court_calibration_api_v1_videos__video_id__court_calibration_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                video_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateCourtCalibrationRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CourtCalibrationOut"];
                 };
             };
             /** @description Validation Error */

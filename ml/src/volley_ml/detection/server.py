@@ -35,9 +35,11 @@ from pydantic import BaseModel, Field
 from volley_ml.detection.ball_plausibility import (
     has_ball_color_pattern,
     has_plausible_ball_shape,
+    is_ball_at_person_foot_level,
 )
 from volley_ml.detection.jersey_color import cluster_jersey_colors, dominant_torso_color
 from volley_ml.detection.rfdetr_preannotation import sha256_file
+from volley_ml.detection.tiling import crop_box_px, merge_tiled_person_boxes
 
 _MODEL_VERSION = "rfdetr-1.9.4-nano-coco-smoke"
 _COCO_PERSON_CLASS_ID = 1
@@ -77,6 +79,11 @@ class DetectFrameResponse(BaseModel):
     image_height: int
     boxes: list[DetectionBox]
     balls: list[BallBox]
+    # How many ball-class candidates this frame had that were rejected as
+    # almost certainly a shoe (see ball_plausibility.is_ball_at_person_foot_level)
+    # -- surfaced so the worker can accumulate a real, honest count in
+    # ModelRun.metrics rather than this heuristic running invisibly.
+    ball_candidates_vetoed_by_foot_overlap: int = 0
 
 
 class HealthResponse(BaseModel):
@@ -131,35 +138,28 @@ def health() -> HealthResponse:
     )
 
 
-@app.post("/detect-frame", response_model=DetectFrameResponse)
-async def detect_frame(
-    image: UploadFile = File(...),
-    threshold: float = Form(0.35),
-    ball_threshold: float = Form(0.15),
-) -> DetectFrameResponse:
-    from PIL import Image as PILImage
-
-    if not 0.0 <= threshold <= 1.0:
-        raise HTTPException(status_code=422, detail="threshold must be between 0 and 1")
-    if not 0.0 <= ball_threshold <= 1.0:
-        raise HTTPException(status_code=422, detail="ball_threshold must be between 0 and 1")
-
-    raw = await image.read()
-    try:
-        source = PILImage.open(io.BytesIO(raw)).convert("RGB")
-    except Exception as exc:
-        raise HTTPException(status_code=422, detail=f"could not decode image: {exc}") from exc
-
-    loaded = _get_model()
-    width, height = source.size
-    # Run once at the lower of the two thresholds and filter per class
-    # below -- a single forward pass covers both signals, cheaper than
-    # predicting twice per frame on CPU.
-    detections = loaded.model.predict(source, threshold=min(threshold, ball_threshold))
-
-    image_array = np.asarray(source)
+def _classify_pass(
+    detections,
+    *,
+    image_array: np.ndarray,
+    width: float,
+    height: float,
+    threshold: float,
+    ball_threshold: float,
+    id_prefix: str,
+) -> tuple[
+    list[tuple[str, float, float, float, float, float]],
+    list[tuple[float, float, float, float, float]],
+]:
+    """Splits one model.predict() result into (person_boxes, ball_candidates)
+    -- shared by the full-frame pass and, when far-tiling is enabled, the
+    crop pass, so the two passes can't silently apply different gating
+    logic. `ball_candidates` entries are (x1, y1, x2, y2, confidence);
+    the shape/color plausibility gates already ran here, but the
+    person-foot-overlap veto can only run once both passes' person boxes
+    are merged, so it happens one level up in detect_frame."""
     person_boxes: list[tuple[str, float, float, float, float, float]] = []
-    ball_boxes: list[BallBox] = []
+    ball_candidates: list[tuple[float, float, float, float, float]] = []
     for index, (coordinates, confidence, class_id) in enumerate(
         zip(
             detections.xyxy.tolist(),
@@ -178,7 +178,7 @@ async def detect_frame(
         if class_id == _COCO_PERSON_CLASS_ID:
             if confidence < threshold:
                 continue
-            person_boxes.append((f"box-{index}", x1, y1, x2, y2, float(confidence)))
+            person_boxes.append((f"{id_prefix}-{index}", x1, y1, x2, y2, float(confidence)))
         elif class_id == _COCO_SPORTS_BALL_CLASS_ID:
             if confidence < ball_threshold:
                 continue
@@ -187,7 +187,85 @@ async def detect_frame(
                 continue
             if not has_ball_color_pattern(image_array, bbox):
                 continue
-            ball_boxes.append(BallBox(x1=x1, y1=y1, x2=x2, y2=y2, confidence=float(confidence)))
+            ball_candidates.append((x1, y1, x2, y2, float(confidence)))
+    return person_boxes, ball_candidates
+
+
+@app.post("/detect-frame", response_model=DetectFrameResponse)
+async def detect_frame(
+    image: UploadFile = File(...),
+    threshold: float = Form(0.35),
+    ball_threshold: float = Form(0.15),
+    enable_far_tiling: bool = Form(False),
+) -> DetectFrameResponse:
+    from PIL import Image as PILImage
+
+    if not 0.0 <= threshold <= 1.0:
+        raise HTTPException(status_code=422, detail="threshold must be between 0 and 1")
+    if not 0.0 <= ball_threshold <= 1.0:
+        raise HTTPException(status_code=422, detail="ball_threshold must be between 0 and 1")
+
+    raw = await image.read()
+    try:
+        source = PILImage.open(io.BytesIO(raw)).convert("RGB")
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=f"could not decode image: {exc}") from exc
+
+    loaded = _get_model()
+    width, height = source.size
+    image_array = np.asarray(source)
+
+    # Run once at the lower of the two thresholds and filter per class
+    # below -- a single forward pass covers both signals, cheaper than
+    # predicting twice per frame on CPU.
+    run_threshold = min(threshold, ball_threshold)
+    full_detections = loaded.model.predict(source, threshold=run_threshold)
+    person_boxes, ball_candidates = _classify_pass(
+        full_detections,
+        image_array=image_array,
+        width=width,
+        height=height,
+        threshold=threshold,
+        ball_threshold=ball_threshold,
+        id_prefix="full",
+    )
+
+    # Direct response to real user feedback that far-side (upper-frame,
+    # near-net) players are poorly detected -- a second forward pass on a
+    # cropped upper region gives that region proportionally more effective
+    # resolution than a single full-frame pass can. Real ~2x per-frame CPU
+    # cost when enabled; see tiling.py's own docstring for the camera-angle
+    # assumption behind the crop fraction.
+    if enable_far_tiling:
+        crop_box = crop_box_px(width, height)
+        crop_image = source.crop(crop_box)
+        crop_detections = loaded.model.predict(crop_image, threshold=run_threshold)
+        crop_person_boxes, crop_ball_candidates = _classify_pass(
+            crop_detections,
+            image_array=image_array,
+            width=crop_box[2],
+            height=crop_box[3],
+            threshold=threshold,
+            ball_threshold=ball_threshold,
+            id_prefix="crop",
+        )
+        person_boxes = merge_tiled_person_boxes(person_boxes, crop_person_boxes)
+        ball_candidates = ball_candidates + crop_ball_candidates
+
+    # A shoe is always attached to a person at foot level -- reject any
+    # ball candidate almost entirely contained in a detected person's own
+    # foot zone (see ball_plausibility.is_ball_at_person_foot_level for the
+    # containment-vs-overlap rationale). Runs once, against the final
+    # merged person-box list, which is why it happens here rather than
+    # inside _classify_pass.
+    person_boxes_xyxy = [(x1, y1, x2, y2) for _, x1, y1, x2, y2, _ in person_boxes]
+    ball_boxes: list[BallBox] = []
+    vetoed_count = 0
+    for x1, y1, x2, y2, confidence in ball_candidates:
+        if is_ball_at_person_foot_level((x1, y1, x2, y2), person_boxes_xyxy):
+            vetoed_count += 1
+            continue
+        ball_boxes.append(BallBox(x1=x1, y1=y1, x2=x2, y2=y2, confidence=confidence))
 
     # Same on-court-height gate as flag_jersey_color_outliers in
     # rfdetr_preannotation.py -- reimplemented directly against pixel boxes
@@ -231,4 +309,5 @@ async def detect_frame(
         image_height=height,
         boxes=boxes,
         balls=ball_boxes,
+        ball_candidates_vetoed_by_foot_overlap=vetoed_count,
     )

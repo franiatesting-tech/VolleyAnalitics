@@ -30,9 +30,27 @@ class _FakeDetections:
 class _FakeModel:
     def __init__(self, detections: _FakeDetections):
         self._detections = detections
+        self.call_count = 0
 
     def predict(self, source, threshold):
+        self.call_count += 1
         return self._detections
+
+
+class _FakeModelSequence:
+    """Returns a different _FakeDetections per call -- the first call is
+    the full-frame pass, the second (only made when far-tiling is enabled)
+    is the crop pass. Lets a test assert what each pass individually
+    contributed."""
+
+    def __init__(self, detections_by_call: list[_FakeDetections]):
+        self._detections_by_call = list(detections_by_call)
+        self.call_count = 0
+
+    def predict(self, source, threshold):
+        detections = self._detections_by_call[self.call_count]
+        self.call_count += 1
+        return detections
 
 
 def _rgb_image_bytes(width: int = 100, height: int = 100, color=(10, 10, 10)) -> bytes:
@@ -71,9 +89,19 @@ def client(monkeypatch):
     return fastapi_testclient.TestClient(server_module.app)
 
 
-def _stub_model(monkeypatch, detections: _FakeDetections, weights_sha256: str = "f" * 64) -> None:
+def _stub_model(monkeypatch, detections: _FakeDetections, weights_sha256: str = "f" * 64):
     loaded = SimpleNamespace(model=_FakeModel(detections), weights_sha256=weights_sha256)
     monkeypatch.setattr(server_module, "_get_model", lambda: loaded)
+    return loaded.model
+
+
+def _stub_model_sequence(
+    monkeypatch, detections_by_call: list[_FakeDetections], weights_sha256: str = "f" * 64
+):
+    model = _FakeModelSequence(detections_by_call)
+    loaded = SimpleNamespace(model=model, weights_sha256=weights_sha256)
+    monkeypatch.setattr(server_module, "_get_model", lambda: loaded)
+    return model
 
 
 def test_health_reports_model_identity(client, monkeypatch):
@@ -313,3 +341,112 @@ def test_detect_frame_flags_a_real_jersey_color_outlier(client, monkeypatch):
     boxes = response.json()["boxes"]
     outlier_flags = [box["jersey_color_outlier"] for box in boxes]
     assert outlier_flags == [False, False, True, False, False, False]
+
+
+def test_detect_frame_tiling_disabled_makes_only_one_model_call(client, monkeypatch):
+    model = _stub_model(
+        monkeypatch,
+        _FakeDetections(xyxy=[[10, 10, 40, 90]], confidence=[0.9], class_id=[1]),
+    )
+    response = client.post(
+        "/detect-frame",
+        files={"image": ("frame.png", _rgb_image_bytes(), "image/png")},
+    )
+    assert response.status_code == 200
+    assert model.call_count == 1
+
+
+def test_detect_frame_enable_far_tiling_makes_a_second_call_and_merges_a_new_far_player(
+    client, monkeypatch
+):
+    model = _stub_model_sequence(
+        monkeypatch,
+        [
+            # Full-frame pass: one near player.
+            _FakeDetections(xyxy=[[10, 60, 30, 90]], confidence=[0.9], class_id=[1]),
+            # Crop pass: a different far player, never seen in the
+            # full-frame pass.
+            _FakeDetections(xyxy=[[50, 5, 65, 30]], confidence=[0.8], class_id=[1]),
+        ],
+    )
+    response = client.post(
+        "/detect-frame",
+        files={"image": ("frame.png", _rgb_image_bytes(), "image/png")},
+        data={"enable_far_tiling": "true"},
+    )
+    assert response.status_code == 200
+    assert model.call_count == 2
+    assert len(response.json()["boxes"]) == 2
+
+
+def test_detect_frame_far_tiling_prefers_crop_pass_box_on_overlap(client, monkeypatch):
+    _stub_model_sequence(
+        monkeypatch,
+        [
+            _FakeDetections(xyxy=[[10, 10, 30, 50]], confidence=[0.5], class_id=[1]),
+            _FakeDetections(xyxy=[[11, 11, 29, 49]], confidence=[0.9], class_id=[1]),
+        ],
+    )
+    response = client.post(
+        "/detect-frame",
+        files={"image": ("frame.png", _rgb_image_bytes(), "image/png")},
+        data={"enable_far_tiling": "true"},
+    )
+    assert response.status_code == 200
+    boxes = response.json()["boxes"]
+    assert len(boxes) == 1
+    assert boxes[0]["confidence"] == pytest.approx(0.9)
+
+
+def test_detect_frame_rejects_ball_overlapping_person_feet(client, monkeypatch):
+    # Person box (0,0,40,100); a "ball" fully inside its bottom 28% (the
+    # foot zone) is almost certainly the person's own shoe.
+    _stub_model(
+        monkeypatch,
+        _FakeDetections(
+            xyxy=[[0, 0, 40, 100], [5, 80, 20, 95]],
+            confidence=[0.9, 0.5],
+            class_id=[1, 37],
+        ),
+    )
+    response = client.post(
+        "/detect-frame",
+        files={
+            "image": (
+                "frame.png",
+                _image_with_ball_patch(bbox=(5, 80, 20, 95)),
+                "image/png",
+            )
+        },
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["balls"] == []
+    assert body["ball_candidates_vetoed_by_foot_overlap"] == 1
+
+
+def test_detect_frame_keeps_ball_near_raised_hand_even_with_person_overlap(client, monkeypatch):
+    # Same person box, but the "ball" is up near the head/raised-hand
+    # region -- a real serve/spike/block contact, must survive.
+    _stub_model(
+        monkeypatch,
+        _FakeDetections(
+            xyxy=[[0, 0, 40, 100], [10, 5, 25, 20]],
+            confidence=[0.9, 0.5],
+            class_id=[1, 37],
+        ),
+    )
+    response = client.post(
+        "/detect-frame",
+        files={
+            "image": (
+                "frame.png",
+                _image_with_ball_patch(bbox=(10, 5, 25, 20)),
+                "image/png",
+            )
+        },
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body["balls"]) == 1
+    assert body["ball_candidates_vetoed_by_foot_overlap"] == 0

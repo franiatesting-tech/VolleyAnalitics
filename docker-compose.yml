@@ -59,6 +59,9 @@ services:
       - ./services/api:/workspace/services/api
       - ./packages/domain-py:/workspace/packages/domain-py
       - ./packages/storage-py:/workspace/packages/storage-py
+      # volley-ml's base package (pure homography math for court
+      # calibration) -- see services/api/pyproject.toml's [tool.uv.sources].
+      - ./ml:/workspace/ml
       - local_storage:/data/local-storage
 
   worker:

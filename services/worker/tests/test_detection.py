@@ -80,6 +80,7 @@ class _FakeClient:
         self._connect_error = connect_error
         self._fail_after = fail_after
         self._posts_made = 0
+        self.posted_data: list[dict] = []
 
     def __enter__(self):
         return self
@@ -95,6 +96,7 @@ class _FakeClient:
     def post(self, url, *, files, data):
         if self._fail_after is not None and self._posts_made >= self._fail_after:
             raise RuntimeError("simulated inference server crash mid-run")
+        self.posted_data.append(data)
         self._posts_made += 1
         return _FakeResponse(self._frame_payloads.pop(0))
 
@@ -140,6 +142,7 @@ def _patch_common(
         fail_after=fail_after,
     )
     monkeypatch.setattr(detection_module.httpx, "Client", lambda timeout: client)
+    return client
 
 
 class _FakeAdapter:
@@ -252,6 +255,48 @@ def test_success_persists_frames_with_provenance(sqlite_session_factory, monkeyp
         assert frames[1].ball_detections == []
 
 
+def test_keeps_only_the_highest_confidence_ball_per_frame(
+    sqlite_session_factory, monkeypatch, tmp_path
+):
+    """Direct regression test for a real finding: ~46% of real frames with
+    any ball detection had multiple simultaneous candidates (mostly
+    harmless near-duplicate boxes around one real object, but with no
+    principled way downstream to pick among them). Only the
+    highest-confidence candidate is ever persisted -- never averaged,
+    never all kept."""
+    from volley_worker.detection import run_video_detection
+
+    _seed_video_with_pipeline_run(sqlite_session_factory)
+    frame_paths = _make_frame_files(tmp_path, 1)
+    _patch_common(
+        monkeypatch,
+        frame_paths=frame_paths,
+        frame_payloads=[
+            {
+                "image_width": 100,
+                "image_height": 100,
+                "boxes": [],
+                "balls": [
+                    {"x1": 10, "y1": 10, "x2": 20, "y2": 20, "confidence": 0.3},
+                    {"x1": 50, "y1": 50, "x2": 60, "y2": 60, "confidence": 0.81},
+                    {"x1": 30, "y1": 30, "x2": 40, "y2": 40, "confidence": 0.5},
+                ],
+            }
+        ],
+    )
+
+    result = run_video_detection.run(pipeline_run_id="pr1", video_id="v1")
+    assert result["status"] == "completed"
+
+    with sqlite_session_factory() as db:
+        model_run = db.query(ModelRun).filter_by(pipeline_run_id="pr1").one()
+        assert model_run.metrics["ball_candidates"] == 1
+        frame = db.query(VideoDetectionFrame).filter_by(model_run_id=model_run.id).one()
+        assert len(frame.ball_detections) == 1
+        assert frame.ball_detections[0]["confidence"] == 0.81
+        assert frame.ball_detections[0]["bbox"] == {"x": 0.5, "y": 0.5, "width": 0.1, "height": 0.1}
+
+
 def test_flags_a_ball_position_that_recurs_across_many_seconds(
     sqlite_session_factory, monkeypatch, tmp_path
 ):
@@ -262,14 +307,22 @@ def test_flags_a_ball_position_that_recurs_across_many_seconds(
     whatever the worker's own env default happens to be) span 10 real
     seconds -- wide enough that every frame has some other same-spot
     detection at least 5s away (the flagging threshold), not just the
-    two endpoints of the span."""
+    two endpoints of the span.
+
+    Frame 6 gets a second, higher-confidence, genuinely different ball
+    candidate mixed in -- the per-frame dedup (only the single
+    highest-confidence candidate is ever persisted) means that frame's
+    static-position candidate never reaches storage at all, only the
+    moving one does; the static-position check below is scoped to every
+    *other* frame accordingly."""
     from volley_worker.detection import run_video_detection
 
     _seed_video_with_pipeline_run(sqlite_session_factory)
     frame_count = 11
     frame_paths = _make_frame_files(tmp_path, frame_count)
     # A static "ball" at the same spot in every frame, plus one genuinely
-    # different, non-recurring ball detection mixed in for contrast.
+    # different, non-recurring, higher-confidence ball detection mixed
+    # into frame 6 for contrast.
     frame_payloads = [
         {
             "image_width": 100,
@@ -289,11 +342,15 @@ def test_flags_a_ball_position_that_recurs_across_many_seconds(
         model_run = db.query(ModelRun).filter_by(pipeline_run_id="pr1").one()
         frames = db.query(VideoDetectionFrame).filter_by(model_run_id=model_run.id).all()
         for frame in frames:
+            if frame.frame_index == 6:
+                continue
             static_ball = next(b for b in frame.ball_detections if b["confidence"] == 0.2)
             assert static_ball["is_static_false_positive"] is True
 
         moving_frame = next(f for f in frames if f.frame_index == 6)
-        moving_ball = next(b for b in moving_frame.ball_detections if b["confidence"] == 0.9)
+        assert len(moving_frame.ball_detections) == 1
+        moving_ball = moving_frame.ball_detections[0]
+        assert moving_ball["confidence"] == 0.9
         assert moving_ball["is_static_false_positive"] is False
 
 
@@ -410,7 +467,7 @@ def test_sample_fps_override_is_passed_through_and_used_for_timestamps(
 
     with sqlite_session_factory() as db:
         model_run = db.query(ModelRun).filter_by(pipeline_run_id="pr1").one()
-        assert model_run.metrics["sample_fps"] == 5.0
+        assert model_run.metrics["base_sample_fps"] == 5.0
         frames = (
             db.query(VideoDetectionFrame)
             .filter_by(model_run_id=model_run.id)
@@ -592,3 +649,177 @@ def test_missing_original_asset_fails_without_retry(sqlite_session_factory, monk
         pipeline_run = db.get(PipelineRun, "pr1")
         assert pipeline_run.status == PipelineRunStatus.FAILED
         assert "original storage reference" in pipeline_run.error
+
+
+def test_enable_far_tiling_is_threaded_into_the_posted_request(
+    sqlite_session_factory, monkeypatch, tmp_path
+):
+    from volley_worker.detection import run_video_detection
+
+    _seed_video_with_pipeline_run(sqlite_session_factory)
+    frame_paths = _make_frame_files(tmp_path, 1)
+    client = _patch_common(
+        monkeypatch,
+        frame_paths=frame_paths,
+        frame_payloads=[{"image_width": 100, "image_height": 100, "boxes": [], "balls": []}],
+    )
+
+    result = run_video_detection.run(pipeline_run_id="pr1", video_id="v1")
+    assert result["status"] == "completed"
+    assert len(client.posted_data) == 1
+    # detection_far_tiling_enabled defaults to False in this test
+    # environment (see conftest.py) -- this test's own settings weren't
+    # overridden, so the posted value must reflect that.
+    assert client.posted_data[0]["enable_far_tiling"] == "False"
+
+
+def _settings_with_burst_enabled(**overrides):
+    from volley_worker.config import Settings
+
+    defaults = dict(
+        env="test",
+        database_url="sqlite:///:memory:",
+        valkey_url="redis://localhost:6379/0",
+        skip_ffmpeg_license_check=True,
+        detection_far_tiling_enabled=False,
+        detection_burst_enabled=True,
+        detection_burst_fps=20.0,
+        detection_burst_window_radius_seconds=0.6,
+        detection_burst_max_windows=40,
+    )
+    defaults.update(overrides)
+    return Settings(**defaults)
+
+
+def test_burst_resampling_extracts_a_window_around_a_real_ball_sighting(
+    sqlite_session_factory, monkeypatch, tmp_path
+):
+    """Direct regression test for the ball-speed cadence feature: once the
+    baseline pass finds a real ball sighting, a second, denser extraction
+    must run scoped to a short window around it -- and the resulting extra
+    frames must persist with frame_index values that continue past the
+    baseline's own (never colliding on the real DB unique constraint)."""
+    import volley_worker.detection as detection_module
+    from volley_worker.detection import run_video_detection
+
+    _seed_video_with_pipeline_run(sqlite_session_factory)
+    baseline_frames = _make_frame_files(tmp_path, 2)
+    burst_dir = tmp_path / "burst"
+    burst_dir.mkdir()
+    burst_frames = _make_frame_files(burst_dir, 2)
+
+    extract_calls: list[dict] = []
+
+    def _fake_extract(source, out_dir, fps, max_duration_seconds=None, start_offset_seconds=None):
+        extract_calls.append(
+            {
+                "fps": fps,
+                "max_duration_seconds": max_duration_seconds,
+                "start_offset_seconds": start_offset_seconds,
+            }
+        )
+        return baseline_frames if len(extract_calls) == 1 else burst_frames
+
+    monkeypatch.setattr(detection_module, "get_storage_adapter", lambda: _FakeAdapter())
+    monkeypatch.setattr(detection_module, "extract_frames_at_fps", _fake_extract)
+    monkeypatch.setattr(detection_module, "get_settings", lambda: _settings_with_burst_enabled())
+
+    frame_payloads = [
+        {"image_width": 100, "image_height": 100, "boxes": [], "balls": []},  # frame 1, t=0.0
+        {  # frame 2, t=0.2 -- a real, non-static ball sighting
+            "image_width": 100,
+            "image_height": 100,
+            "boxes": [],
+            "balls": [{"x1": 40, "y1": 40, "x2": 50, "y2": 50, "confidence": 0.5}],
+        },
+        {"image_width": 100, "image_height": 100, "boxes": [], "balls": []},  # burst frame 1
+        {"image_width": 100, "image_height": 100, "boxes": [], "balls": []},  # burst frame 2
+    ]
+    client = _FakeClient(
+        health_payload={
+            "status": "ok",
+            "model_version": "rfdetr-nano-test",
+            "weights_sha256": "f" * 64,
+        },
+        frame_payloads=frame_payloads,
+    )
+    monkeypatch.setattr(detection_module.httpx, "Client", lambda timeout: client)
+
+    result = run_video_detection.run(pipeline_run_id="pr1", video_id="v1")
+    assert result["status"] == "completed"
+    assert result["frames_processed"] == 4
+
+    assert len(extract_calls) == 2
+    baseline_call, burst_call = extract_calls
+    assert baseline_call["fps"] == 5.0  # detection_sample_fps default
+    assert burst_call["fps"] == 20.0
+    # Real sighting at t=0.2, radius=0.6 -> window [max(0, -0.4), 0.8].
+    assert burst_call["start_offset_seconds"] == pytest.approx(0.0)
+    assert burst_call["max_duration_seconds"] == pytest.approx(0.8)
+
+    with sqlite_session_factory() as db:
+        model_run = db.query(ModelRun).filter_by(pipeline_run_id="pr1").one()
+        assert model_run.metrics["burst_windows_count"] == 1
+        assert model_run.metrics["burst_windows_dropped"] == 0
+        assert model_run.metrics["burst_frames_added"] == 2
+        assert model_run.metrics["base_sample_fps"] == 5.0
+        assert model_run.metrics["burst_sample_fps"] == 20.0
+        assert model_run.metrics["frames_total"] == 4
+
+        frames = (
+            db.query(VideoDetectionFrame)
+            .filter_by(model_run_id=model_run.id)
+            .order_by(VideoDetectionFrame.frame_index)
+            .all()
+        )
+        # Exactly 4 rows with no frame_index collision -- would have raised
+        # an IntegrityError against the real (model_run_id, frame_index)
+        # unique constraint if the burst phase reused the baseline's own
+        # indices.
+        assert [f.frame_index for f in frames] == [1, 2, 3, 4]
+
+
+def test_burst_resampling_does_nothing_when_no_real_ball_sighting_exists(
+    sqlite_session_factory, monkeypatch, tmp_path
+):
+    """A rally with literally zero baseline-rate ball hits gets no burst
+    densification -- an honest, documented v1 gap, not a silent one."""
+    import volley_worker.detection as detection_module
+    from volley_worker.detection import run_video_detection
+
+    _seed_video_with_pipeline_run(sqlite_session_factory)
+    baseline_frames = _make_frame_files(tmp_path, 2)
+
+    extract_calls: list[dict] = []
+
+    def _fake_extract(source, out_dir, fps, max_duration_seconds=None, start_offset_seconds=None):
+        extract_calls.append({"fps": fps})
+        return baseline_frames
+
+    monkeypatch.setattr(detection_module, "get_storage_adapter", lambda: _FakeAdapter())
+    monkeypatch.setattr(detection_module, "extract_frames_at_fps", _fake_extract)
+    monkeypatch.setattr(detection_module, "get_settings", lambda: _settings_with_burst_enabled())
+
+    frame_payloads = [
+        {"image_width": 100, "image_height": 100, "boxes": [], "balls": []},
+        {"image_width": 100, "image_height": 100, "boxes": [], "balls": []},
+    ]
+    client = _FakeClient(
+        health_payload={
+            "status": "ok",
+            "model_version": "rfdetr-nano-test",
+            "weights_sha256": "f" * 64,
+        },
+        frame_payloads=frame_payloads,
+    )
+    monkeypatch.setattr(detection_module.httpx, "Client", lambda timeout: client)
+
+    result = run_video_detection.run(pipeline_run_id="pr1", video_id="v1")
+    assert result["status"] == "completed"
+    assert result["frames_processed"] == 2
+    assert len(extract_calls) == 1  # baseline only -- no burst extraction call
+
+    with sqlite_session_factory() as db:
+        model_run = db.query(ModelRun).filter_by(pipeline_run_id="pr1").one()
+        assert model_run.metrics["burst_windows_count"] == 0
+        assert model_run.metrics["burst_frames_added"] == 0

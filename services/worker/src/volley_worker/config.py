@@ -58,6 +58,39 @@ class Settings(BaseSettings):
     # a generic (non-volleyball-fine-tuned) COCO detector to be confident
     # about than a person is.
     detection_ball_threshold: float = Field(default=0.15, alias="DETECTION_BALL_THRESHOLD")
+    # Direct response to real user feedback: far-side (upper-frame, near-net)
+    # players are poorly detected on a standard elevated wide-angle
+    # broadcast shot -- a single full-frame RF-DETR nano pass gives them too
+    # few effective pixels. Adds one extra forward pass per sampled frame on
+    # a cropped upper region (see ml/detection/tiling.py) -- a real ~1.8-2x
+    # per-frame CPU cost, applied unconditionally to every sampled frame of
+    # every run (a much larger total-wall-clock multiplier than
+    # detection_sample_fps's own precedent, since that only compounds with
+    # this one). On by default since the user explicitly asked for this
+    # quality improvement; disable per-deployment if the cost isn't worth it.
+    detection_far_tiling_enabled: bool = Field(default=True, alias="DETECTION_FAR_TILING_ENABLED")
+
+    # Direct response to real user feedback: sampling needs to match real
+    # ball speed/direction changes, citing a 120km/h (33.3 m/s) ball. At
+    # detection_sample_fps=5.0 (0.2s/sample) the ball can travel ~6.7m
+    # between two consecutive samples -- over a third of an 18m court --
+    # structurally too sparse to resolve a fast attack's direction.
+    # Sampling the *whole* video at a much higher fps is CPU-prohibitive and
+    # mostly wasted on non-ball-motion dead time; instead, once the baseline
+    # pass finds a real ball sighting, a short window around it is
+    # re-extracted and re-inferred at detection_burst_fps (see
+    # ball_filtering.compute_burst_windows and detection.py's burst phase).
+    # Bounded by detection_burst_max_windows so a rally-dense video can't
+    # balloon cost unboundedly: worst case is
+    # max_windows * window_radius*2 * burst_fps extra frames, each costing
+    # the same ~0.4-1.7s/frame as any other sampled frame. On by default --
+    # direct response to the user's explicit cadence request.
+    detection_burst_enabled: bool = Field(default=True, alias="DETECTION_BURST_ENABLED")
+    detection_burst_fps: float = Field(default=20.0, alias="DETECTION_BURST_FPS")
+    detection_burst_window_radius_seconds: float = Field(
+        default=0.6, alias="DETECTION_BURST_WINDOW_RADIUS_SECONDS"
+    )
+    detection_burst_max_windows: int = Field(default=40, alias="DETECTION_BURST_MAX_WINDOWS")
 
     # --- FFmpeg build verification (D-006, see LICENSE_DECISIONS.md) ---
     # The worker is the only process that ever invokes ffmpeg/ffprobe --

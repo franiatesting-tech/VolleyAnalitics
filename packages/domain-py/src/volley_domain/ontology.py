@@ -791,6 +791,19 @@ class CourtCalibration(Base):
     schemas. Correct shape: `[{"keypoint_name": "sideline_near_left",
     "x_pixel": ..., "y_pixel": ..., "visible": bool}, ...]`.
 
+    `net_height_m`/`court_width_m`/`court_length_m` were added 2026-09-01,
+    closing a real gap the field-compatibility claim above had never
+    actually covered: `CameraCalibrationAnnotation` has always required
+    `net_height_m` and defaulted `court_width_m`/`court_length_m` (9.0/18.0),
+    but this table had none of the three until a real manual-calibration
+    producer needed to persist them. `net_height_m` stays nullable -- a
+    calibration's homography is valid without it, and a missing value must
+    never silently become a fabricated FIVB-standard default (2.43m/2.24m);
+    it is display-only metadata for this pass (see
+    `volley_ml.court.keypoints` and the `/court-calibration` route) and is
+    never used to compute ball height or net clearance, which would need
+    real vertical (Z) data a single 2D homography cannot recover.
+
     A CameraSegment may accumulate more than one CourtCalibration row over
     time (e.g. a manual recalibration superseding an earlier automatic
     one) -- superseded rows are never deleted, only marked via
@@ -822,6 +835,18 @@ class CourtCalibration(Base):
     rotation_world_to_camera: Mapped[list[float] | None] = mapped_column(JSON, nullable=True)
     translation_world_to_camera_m: Mapped[list[float] | None] = mapped_column(JSON, nullable=True)
     supports_metric_3d: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    net_height_m: Mapped[float | None] = mapped_column(Float, nullable=True)
+    court_width_m: Mapped[float] = mapped_column(Float, nullable=False, default=9.0)
+    court_length_m: Mapped[float] = mapped_column(Float, nullable=False, default=18.0)
+    # Whether the near side's zone 1 (right-back, the serve position) is
+    # on the left or right as viewed in the calibrated frame -- resolves
+    # ml/court/rotation.py's `mirror_x` parameter, which its own docstring
+    # says "must be verified per camera setup against a frame with a known
+    # server position, never guessed." Nullable: a calibration is fully
+    # valid for side (near/far) and front/back-row without it -- only the
+    # exact numbered zone (1-6) needs it, and stays unavailable, not
+    # guessed, until a human sets it.
+    zone_mirror_x: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     reprojection_error_px: Mapped[float | None] = mapped_column(Float, nullable=True)
     confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
     created_by_user_id: Mapped[str | None] = mapped_column(String(255), nullable=True)

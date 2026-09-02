@@ -9,6 +9,8 @@ export type UploadStage = "reserving" | "uploading" | "validating";
 type UploadTarget = components["schemas"]["UploadTargetOut"];
 export type VideoDetectionStatus = components["schemas"]["VideoDetectionStatusOut"];
 export type VideoDetectionFrame = components["schemas"]["VideoDetectionFrameOut"];
+export type CourtCalibration = components["schemas"]["CourtCalibrationOut"];
+export type CourtKeypointIn = components["schemas"]["CourtKeypointIn"];
 
 function uploadToSignedTarget(
   target: UploadTarget,
@@ -187,6 +189,50 @@ export function useTriggerDetection(videoId: string) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["video-detection-status", videoId] });
+    },
+  });
+}
+
+export function useCourtCalibration(videoId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ["court-calibration", videoId],
+    queryFn: async () => {
+      const { data, error } = await apiClient.GET("/api/v1/videos/{video_id}/court-calibration", {
+        params: { path: { video_id: videoId } },
+      });
+      if (error) throw new Error("Failed to load court calibration");
+      return data;
+    },
+    enabled,
+  });
+}
+
+export function useCourtCalibrationPreview(videoId: string) {
+  return useMutation({
+    mutationFn: async (body: components["schemas"]["CourtCalibrationPreviewRequest"]) => {
+      const { data, error } = await apiClient.POST(
+        "/api/v1/videos/{video_id}/court-calibration/preview",
+        { params: { path: { video_id: videoId } }, body },
+      );
+      if (error) throw new Error("Failed to compute a calibration preview");
+      return data;
+    },
+  });
+}
+
+export function useCreateCourtCalibration(videoId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (body: components["schemas"]["CreateCourtCalibrationRequest"]) => {
+      const { data, error } = await apiClient.POST("/api/v1/videos/{video_id}/court-calibration", {
+        params: { path: { video_id: videoId } },
+        body,
+      });
+      if (error) throw new Error("Failed to save court calibration");
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["court-calibration", videoId] });
     },
   });
 }
